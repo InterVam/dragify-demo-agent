@@ -1,0 +1,101 @@
+name,location,min_price,max_price,min_bedrooms,max_bedrooms,property_type
+Al Burouj Phase 3,Heliopolis,4870000,6390000,1,2,studio
+Badya Phase 2,Maadi,1800000,4360000,1,2,studio
+Sky Condos Phase 2,El Rehab,3560000,7540000,2,4,duplex
+Badya Phase 4,Nasr City,2770000,6360000,3,5,duplex
+Al Burouj Phase 3,Sheikh Zayed,1900000,5360000,3,4,duplex
+Sky Condos Phase 2,Zamalek,2620000,4350000,2,4,villa
+Zayed Dunes Phase 1,Nasr City,2580000,5360000,1,2,apartment
+Mountain View Hyde Park Phase 5,El Shorouk,1820000,3050000,2,4,penthouse
+New Giza Phase 2,Maadi,2240000,5890000,1,2,villa
+Il Bosco Phase 1,El Shorouk,2570000,6030000,3,4,villa
+The Loft Phase 4,New Cairo,4770000,7620000,3,3,penthouse
+Swan Lake Phase 3,Zamalek,3100000,4850000,3,3,penthouse
+Capital Heights Phase 2,El Rehab,4430000,7570000,2,3,penthouse
+Swan Lake Phase 2,Nasr City,2460000,6100000,3,5,penthouse
+Mountain View Hyde Park Phase 5,Zamalek,1960000,4870000,2,4,villa
+Swan Lake Phase 2,Sheikh Zayed,1980000,5770000,2,3,duplex
+The Loft Phase 5,6th of October,2620000,4780000,2,4,duplex
+Sky Condos Phase 5,Nasr City,4650000,8270000,2,3,duplex
+October Plaza Phase 5,Zamalek,1980000,3220000,2,3,studio
+New Giza Phase 3,6th of October,2910000,4560000,3,5,apartment
+Swan Lake Phase 2,Sheikh Zayed,1910000,2930000,1,1,duplex
+Lake View Residence Phase 3,6th of October,2260000,5030000,3,3,studio
+Bloomfields Phase 3,Maadi,4590000,7930000,2,3,duplex
+Palm Hills New Cairo Phase 2,Zamalek,1940000,4290000,1,1,duplex
+Midtown Solo Phase 3,Maadi,4610000,7460000,3,5,studio
+Capital Heights Phase 1,El Shorouk,3540000,5910000,3,5,penthouse
+Bloomfields Phase 5,Tagamoa,1780000,5330000,1,3,duplex
+October Plaza Phase 3,Zamalek,3340000,6450000,2,4,apartment
+Swan Lake Phase 4,El Rehab,1960000,4780000,2,2,penthouse
+Il Bosco Phase 2,Heliopolis,2350000,4210000,3,5,penthouse
+Badya Phase 3,6th of October,2420000,4230000,1,3,duplex
+Mountain View Hyde Park Phase 5,Zamalek,1740000,3210000,1,1,villa
+Badya Phase 1,Nasr City,1510000,3020000,2,3,apartment
+Zayed Dunes Phase 1,6th of October,4230000,6040000,3,5,villa
+Capital Heights Phase 5,6th of October,2190000,4220000,2,3,duplex
+Mountain View Hyde Park Phase 5,Maadi,2220000,5630000,3,5,apartment
+Al Burouj Phase 5,Tagamoa,4520000,6310000,2,3,studio
+The Loft Phase 3,El Shorouk,2970000,5470000,3,3,apartment
+Swan Lake Phase 2,Maadi,4910000,7290000,3,4,penthouse
+Lake View Residence Phase 1,6th of October,3430000,5060000,1,1,apartment
+Mivida Phase 5,Tagamoa,1860000,4130000,2,4,penthouse
+Bloomfields Phase 1,El Rehab,2089999,5810000,2,3,villa
+Swan Lake Phase 3,Maadi,2700000,4179999,3,3,penthouse
+Uptown Cairo Phase 1,Zamalek,1940000,5570000,3,4,apartment
+Badya Phase 5,El Shorouk,4430000,5910000,3,4,villa
+Badya Phase 5,Sheikh Zayed,4130000,5330000,1,3,duplex
+Bloomfields Phase 4,New Cairo,4620000,7420000,1,3,apartment
+Swan Lake Phase 1,Sheikh Zayed,2550000,5700000,2,4,duplex
+Uptown Cairo Phase 1,Maadi,4410000,8220000,3,4,studio
+Badya Phase 4,New Cairo,4139999,5490000,1,3,penthouse
+Badya Phase 5,Heliopolis,4660000,7320000,1,3,apartment
+Swan Lake Phase 5,El Shorouk,1790000,3510000,2,2,duplex
+New Giza Phase 2,New Cairo,2570000,6050000,1,1,villa
+Il Bosco Phase 5,6th of October,2040000,5160000,1,1,studio
+Al Burouj Phase 5,Maadi,3390000,5110000,1,1,penthouse
+Midtown Solo Phase 3,Tagamoa,3210000,5360000,3,5,apartment
+Al Burouj Phase 3,Nasr City,2630000,5470000,2,3,studio
+New Giza Phase 4,6th of October,1660000,4000000,2,2,studio
+The Loft Phase 5,6th of October,4000000,7580000,2,2,villa
+Uptown Cairo Phase 1,Heliopolis,2550000,5150000,2,2,duplex
+Il Bosco Phase 1,El Shorouk,2290000,5050000,2,2,duplex
+Villette Phase 3,Tagamoa,1800000,4040000,2,4,duplex
+Bloomfields Phase 2,New Cairo,2410000,4810000,2,3,penthouse
+The Loft Phase 5,Maadi,4340000,7960000,2,3,duplex
+Midtown Solo Phase 4,El Rehab,4910000,7360000,2,4,penthouse
+New Giza Phase 4,Sheikh Zayed,2520000,5840000,3,4,villa
+Swan Lake Phase 2,El Rehab,4450000,5840000,2,4,penthouse
+Midtown Solo Phase 2,New Cairo,3240000,6900000,2,3,apartment
+Sky Condos Phase 3,El Shorouk,4010000,5140000,2,2,villa
+Lake View Residence Phase 4,Sheikh Zayed,4700000,8650000,2,4,studio
+The Loft Phase 3,Maadi,4570000,8100000,1,1,apartment
+October Plaza Phase 1,El Shorouk,3050000,6150000,2,2,villa
+Badya Phase 1,Sheikh Zayed,3280000,5620000,3,5,apartment
+Lake View Residence Phase 2,Nasr City,2890000,5620000,1,1,villa
+Mountain View Hyde Park Phase 2,6th of October,4930000,7880000,2,2,apartment
+Capital Heights Phase 4,New Cairo,4800000,7890000,3,3,apartment
+Midtown Solo Phase 4,Nasr City,4540000,6370000,3,5,penthouse
+Mountain View Hyde Park Phase 2,El Shorouk,1630000,5050000,1,3,studio
+Badya Phase 1,New Cairo,3980000,7040000,3,4,villa
+Badya Phase 5,Heliopolis,4270000,5580000,2,4,studio
+Mountain View Hyde Park Phase 2,Tagamoa,1940000,5080000,1,3,studio
+New Giza Phase 4,Zamalek,4000000,7990000,3,4,duplex
+Bloomfields Phase 3,Sheikh Zayed,2820000,4370000,2,4,studio
+Badya Phase 3,Heliopolis,5000000,8310000,1,3,apartment
+Sky Condos Phase 3,Maadi,2760000,5560000,1,1,studio
+Bloomfields Phase 3,Heliopolis,3450000,6040000,2,2,studio
+Swan Lake Phase 5,El Rehab,3390000,7360000,1,3,penthouse
+The Loft Phase 2,Heliopolis,4040000,5160000,2,3,duplex
+Villette Phase 3,Zamalek,4570000,6360000,2,4,penthouse
+October Plaza Phase 1,Maadi,2910000,4360000,2,4,duplex
+Zayed Dunes Phase 4,Tagamoa,2100000,4640000,3,3,studio
+Mountain View Hyde Park Phase 4,Sheikh Zayed,2170000,5910000,2,2,apartment
+New Giza Phase 2,Maadi,3470000,5390000,2,2,villa
+The Address East Phase 4,Zamalek,2170000,5380000,3,4,penthouse
+New Giza Phase 4,6th of October,2760000,5570000,3,5,penthouse
+Palm Hills New Cairo Phase 1,6th of October,2009999,5290000,3,3,villa
+Sky Condos Phase 3,El Shorouk,1520000,5000000,1,2,villa
+Midtown Solo Phase 4,Heliopolis,1860000,4490000,3,4,duplex
+Badya Phase 4,Sheikh Zayed,3200000,4810000,1,3,studio
+Palm Hills New Cairo Phase 5,El Rehab,2240000,4390000,3,5,apartment

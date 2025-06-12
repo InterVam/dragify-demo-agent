@@ -1,0 +1,42 @@
+# Web framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Env
+python-dotenv==1.0.0
+
+# Slack
+slack-sdk==3.26.0
+
+# LangChain
+langchain
+langchain-core
+langchain-community
+langchain-groq
+
+# Google Generative AI (if still used)
+google-generativeai==0.3.1
+
+# Multipart support for file uploads (FastAPI)
+python-multipart==0.0.6
+
+# Pydantic v2
+pydantic==2.4.2
+pydantic-settings==2.0.3
+
+# Async HTTP
+aiohttp==3.9.1
+async-timeout==4.0.3
+httpx==0.24.1
+
+# OAuth & Auth libraries
+
+# Database / ORM
+SQLAlchemy==2.0.20
+asyncpg==0.27.0
+psycopg2
+
+# Typing
+typing-extensions==4.9.0
+
+#Misc
