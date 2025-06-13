@@ -32,13 +32,19 @@ services:
       DATABASE_URL: "postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-mydb}"
 
 
-      # your existing Slack/Groq env vars
+      # Slack
       SLACK_SIGNING_SECRET:  ${SLACK_SIGNING_SECRET}
-      SLACK_APP_TOKEN:       ${SLACK_APP_TOKEN}
       SLACK_CLIENT_ID:       ${SLACK_CLIENT_ID}
       SLACK_CLIENT_SECRET:   ${SLACK_CLIENT_SECRET}
       SLACK_REDIRECT_URI:    ${SLACK_REDIRECT_URI}
+
+      # Groq LLM
       GROQ_API_KEY:          ${GROQ_API_KEY}
+
+      # Zoho
+      ZOHO_CLIENT_ID:        ${ZOHO_CLIENT_ID}
+      ZOHO_CLIENT_SECRET:    ${ZOHO_CLIENT_SECRET}
+      ZOHO_REDIRECT_URI:     ${ZOHO_REDIRECT_URI}
 
   # frontend:
   #   build:

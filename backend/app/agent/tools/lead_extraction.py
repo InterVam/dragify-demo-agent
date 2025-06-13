@@ -1,5 +1,3 @@
-# app/tools/lead_extractor.py
-
 import json
 import logging
 import re
@@ -14,7 +12,8 @@ def extract_lead_info(message: str) -> dict:
     """
     Extract structured lead info from a sales rep's Slack message.
     Output is a dictionary with:
-    - name
+    - first_name
+    - last_name
     - phone
     - location
     - property_type
@@ -31,7 +30,8 @@ def extract_lead_info(message: str) -> dict:
 Message: "{message}"
 
 Extract these exact fields (use empty string "" if not found, except budget which should default to 0 if missing):
-- name
+- first_name
+- last_name
 - phone
 - location
 - property_type
@@ -39,14 +39,14 @@ Extract these exact fields (use empty string "" if not found, except budget whic
 - budget (in Egyptian Pounds as integer; convert '5M', '3.5M', etc. to 5000000, 3500000)
 
 Return ONLY this JSON format:
-{{"name": "", "phone": "", "location": "", "property_type": "", "bedrooms": "", "budget": 0}}
+{{"first_name": "", "last_name": "", "phone": "", "location": "", "property_type": "", "bedrooms": "", "budget": 0}}
 
 Examples:
-Input: "Spoke with Sarah about 3BR villa in New Cairo, budget 8M, her number 01234567890"
-Output: {{"name": "Sarah", "phone": "01234567890", "location": "New Cairo", "property_type": "villa", "bedrooms": "3", "budget": 8000000}}
+Input: "Spoke with Sarah Johnson about 3BR villa in New Cairo, budget 8M, her number 01234567890"
+Output: {{"first_name": "Sarah", "last_name": "Johnson", "phone": "01234567890", "location": "New Cairo", "property_type": "villa", "bedrooms": "3", "budget": 8000000}}
 
 Input: "She needs a 1 bedroom studio in Maadi. Budget 1M. Contact: 0100000000"
-Output: {{"name": "", "phone": "0100000000", "location": "Maadi", "property_type": "studio", "bedrooms": "1", "budget": 1000000}}
+Output: {{"first_name": "", "last_name": "", "phone": "0100000000", "location": "Maadi", "property_type": "studio", "bedrooms": "1", "budget": 1000000}}
 
 Now extract from the message above:"""
 
@@ -75,7 +75,10 @@ Now extract from the message above:"""
                     except json.JSONDecodeError:
                         continue
 
-        required_keys = ["name", "phone", "location", "property_type", "bedrooms", "budget"]
+        required_keys = [
+            "first_name", "last_name", "phone",
+            "location", "property_type", "bedrooms", "budget"
+        ]
         for key in required_keys:
             if key != "budget":
                 lead_info[key] = str(lead_info.get(key, "") or "")
@@ -111,6 +114,7 @@ Now extract from the message above:"""
     except Exception as e:
         logger.error(f"extract_lead_info failed: {str(e)}", exc_info=True)
         return {
-            "name": "", "phone": "", "location": "",
-            "property_type": "", "bedrooms": "", "budget": 0
+            "first_name": "", "last_name": "", "phone": "",
+            "location": "", "property_type": "", "bedrooms": "", "budget": 0
         }
+

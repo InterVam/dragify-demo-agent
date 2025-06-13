@@ -3,6 +3,7 @@ from sqlalchemy.future import select
 from app.db.session import AsyncSessionLocal
 from app.db.models import SlackInstallation
 from app.db.models import Project, Lead
+from app.db.models import ZohoInstallation
 import uuid
 
 async def get_matching_projects(location: str, budget: int, bedrooms: int, property_type: str):
@@ -48,3 +49,41 @@ async def get_slack_token_by_team(team_id: str) -> str | None:
         result = await session.execute(stmt)
         token = result.scalar_one_or_none()
         return token
+
+async def upsert_zoho_installation(user_id: str, access_token: str, refresh_token: str, api_domain: str, expires_in: int):
+    """
+    Insert or update a Zoho token record for a user.
+    """
+    async with AsyncSessionLocal() as session:
+        stmt = select(ZohoInstallation).where(ZohoInstallation.user_id == user_id)
+        result = await session.execute(stmt)
+        existing = result.scalar_one_or_none()
+
+        expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+
+        if existing:
+            existing.access_token = access_token
+            existing.refresh_token = refresh_token
+            existing.api_domain = api_domain
+            existing.expires_at = expires_at
+        else:
+            new_install = ZohoInstallation(
+                user_id=user_id,
+                access_token=access_token,
+                refresh_token=refresh_token,
+                api_domain=api_domain,
+                expires_at=expires_at
+            )
+            session.add(new_install)
+
+        await session.commit()
+
+
+async def get_zoho_tokens_by_user(user_id: str) -> ZohoInstallation | None:
+    """
+    Retrieve Zoho tokens for a specific user.
+    """
+    async with AsyncSessionLocal() as session:
+        stmt = select(ZohoInstallation).where(ZohoInstallation.user_id == user_id)
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()

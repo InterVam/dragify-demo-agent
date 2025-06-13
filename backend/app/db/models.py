@@ -49,3 +49,18 @@ class SlackInstallation(Base):
     __table_args__ = (
         UniqueConstraint('team_id', name='uq_slack_team_id'),
     )
+
+class ZohoInstallation(Base):
+    __tablename__ = "zoho_installations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    team_id = Column(String, nullable=False, unique=True)  # Link to Slack team_id
+    access_token = Column(String, nullable=False)
+    refresh_token = Column(String, nullable=True)
+    api_domain = Column(String, nullable=True)
+    expires_at = Column(TIMESTAMP, nullable=True)
+    created_at = Column(TIMESTAMP, server_default=text("NOW()"))
+
+    __table_args__ = (
+        UniqueConstraint('team_id', name='uq_zoho_team_id'),
+    )

@@ -2,12 +2,17 @@
 user_flows = {
     "team_default": {
         "data_source": "postgresql",
-        "crm": "odoo",
+        "crm": "zoho",
         "notification_channel": "gmail"
+    },
+     "T090NR297QD:": {  # real Slack team_id example
+        "data_source": "postgresql",
+        "crm": "zoho",
+        "notification_channel": "outlook"
     },
     "T01ABCDE123": {  # real Slack team_id example
         "data_source": "sheets",
-        "crm": "odoo",
+        "crm": "zoho",
         "notification_channel": "outlook"
     }
 }
