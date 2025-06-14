@@ -15,10 +15,16 @@ async def insert_into_zoho(lead_info_enhanced: dict) -> dict:
 
     # 2️⃣ Initialize Zoho client using config
     config = ZohoConfig()  # loads client_id, secret, redirect_uri
+    
+    # Check if Zoho is properly configured
+    if not config.is_configured():
+        logger.warning("[insert_into_zoho] Zoho not configured - missing environment variables")
+        return {"success": False, "message": "Zoho CRM not configured. Please set ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, and ZOHO_REDIRECT_URI environment variables.", "error": "missing_config", "lead_info_enhanced": lead_info_enhanced, "lead_info": lead_info_enhanced, "team_id": team_id}
+    
     zoho = ZohoService(
-            client_id="1000.8CJ9QKG8K8TZKUUX5AU6VSPTMR6JFH",
-            client_secret="d75fd06b8954d31954a1589af7aed60ed6f63c3b94",
-            redirect_uri="https://b63d-156-194-236-142.ngrok-free.app/zoho/oauth/callback"
+            client_id=config.client_id,
+            client_secret=config.client_secret,
+            redirect_uri=config.redirect_uri
         )
     
     # 3️⃣ Perform insertion

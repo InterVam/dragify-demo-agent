@@ -30,6 +30,11 @@ class ZohoConfig:
         ]
         if missing:
             raise ValueError(f"Missing Zoho config values: {', '.join(missing)}")
+    
+    @classmethod
+    def is_configured(cls):
+        """Check if Zoho is properly configured without raising an exception"""
+        return bool(cls.CLIENT_ID and cls.CLIENT_SECRET and cls.REDIRECT_URI)
 
-# Validate on import
-ZohoConfig.validate()
+# Only validate if we're trying to use Zoho (don't fail on import)
+# ZohoConfig.validate()
