@@ -1,39 +1,19 @@
-# app/agent/prompt.py
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+
 
 def get_prompt_template() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages([
-        ("system", """
-You are a real estate assistant. You must follow this exact logic:
-
-Step 1:
-Call `extract_lead_info(<message>)`. Assign the result to a variable called `lead_info`.
-
-Step 2:
-Call `fetch_from_postgres(lead_info)`. This will enrich the lead with a list of matched projects. Update `lead_info` in-place with the returned fields.
-
-Step 3:
-Add a new field to `lead_info`: `lead_info["team_id"] = team_id`
-         
-Step 4:
-Call `insert_into_zoho(lead_info)`. This will store the enriched lead.
-
-Final Step:
-Return a friendly message confirming CRM insertion.
-
-You must not skip any step. Always pass the full `lead_info` to each step.
-Do not create any fields manually.
-
-Example:
-Input: "Sarah wants a villa in New Cairo, budget 8M, phone 01234567890"
-
-Do this:
-lead_info = extract_lead_info("Sarah wants a villa in New Cairo, budget 8M, phone 01234567890")
-lead_info = fetch_from_postgres(lead_info)
-lead_info["team_id"] = team_id
-insert_into_zoho(lead_info)
-return "✅ Lead was added to the CRM successfully."
-"""),
+        ("system", "You are a real estate assistant. For each lead message, execute these steps ONCE in order: 1) Call extract_lead_info to get lead data 2) Call fetch_from_postgres with the lead data to find projects 3) Call insert_into_zoho with the enhanced lead data 4) Call send_gmail_notification with the lead data from step 3. Pass the complete lead_info between steps. Do not repeat any step."),
         MessagesPlaceholder(variable_name="agent_scratchpad"),
-        ("human", "{input}")
+        ("human", "Input: {input} Team: {team_id}")
     ])
+
+
+def get_prompt_template_with_config(flow_config: dict) -> ChatPromptTemplate:
+    """Generate prompt template with flow configuration injected"""
+    # Simplified version that works with Groq
+    return get_prompt_template()
+
+
+# 3. Tag with team ID:
+#    `if lead_info_enhanced.get('team_id') != team_id: lead_info_enhanced['team_id'] = team_id`

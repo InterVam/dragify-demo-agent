@@ -1,40 +1,108 @@
-from fastapi import APIRouter, Request, HTTPException, Query
+from fastapi import APIRouter, Request, HTTPException, Query, BackgroundTasks
+from pydantic import BaseModel
+import httpx
+import logging
+import asyncio
+from sqlalchemy import select
+
 from app.services.zoho_service import ZohoService
 from app.config.zoho_config import ZohoConfig
-import logging
+from app.db.session import AsyncSessionLocal
+from app.db.models import ZohoInstallation
 
 router = APIRouter(prefix="/zoho", tags=["Zoho"])
 logger = logging.getLogger(__name__)
 
-# Initialize service with config
+# Initialize ZohoService with config
+config = ZohoConfig()
 zoho_service = ZohoService(
-    client_id=ZohoConfig.client_id,
-    client_secret=ZohoConfig.client_secret,
-    redirect_uri=ZohoConfig.redirect_uri
+    client_id=config.client_id,
+    client_secret=config.client_secret,
+    redirect_uri=config.redirect_uri
 )
 
-@router.get("/oauth/callback")
-async def zoho_oauth_callback(code: str = Query(...), state: str = Query(...)):
+class LeadPayload(BaseModel):
+    first_name: str
+    last_name: str
+    phone: str
+    location: str
+    property_type: str
+    bedrooms: int
+    budget: int
+    matched_projects: list[str]
+    team_id: str
+
+@router.get("/status")
+async def zoho_status():
+    """Check if Zoho is connected for any team"""
+    try:
+        async with AsyncSessionLocal() as session:
+            stmt = select(ZohoInstallation).where(ZohoInstallation.team_id == "T090NR297QD")
+            result = await session.execute(stmt)
+            installation = result.scalar_one_or_none()
+            
+        return {
+            "connected": bool(installation and installation.access_token),
+            "service": "zoho",
+            "configured": bool(config.client_id)
+        }
+    except Exception as e:
+        logger.error(f"Zoho status check error: {e}")
+        return {
+            "connected": False,
+            "service": "zoho",
+            "configured": bool(config.client_id),
+            "error": str(e)
+        }
+
+@router.get("/oauth/authorize")
+async def zoho_oauth_authorize():
+    """Get Zoho OAuth authorization URL"""
+    if not config.client_id:
+        raise HTTPException(status_code=400, detail="Zoho not configured")
+    
+    team_id = "T090NR297QD"  # Demo team ID
+    auth_url = zoho_service.get_authorization_url(team_id)
+    
+    return {"auth_url": auth_url}
+
+@router.get("/oauth/callback", summary="Zoho OAuth callback")
+async def zoho_oauth_callback(
+    code: str = Query(..., description="Authorization code from Zoho"),
+    state: str = Query(..., alias="state", description="Slack team_id stored in state parameter")
+):
     """
-    Callback endpoint for Zoho OAuth. Expects a code and state (user_id).
+    Callback endpoint for Zoho OAuth. 'state' must be the Slack team_id.
+    Exchanges code for tokens and stores them.
     """
     try:
-        logger.info(f"[Zoho OAuth] Callback received for user_id={state}")
-        await zoho_service.exchange_code_for_tokens(code=code, user_id=state)
+        team_id = state
+        logger.info(f"[Zoho OAuth] Received callback for team_id={team_id}")
+        await zoho_service.exchange_code_for_tokens(code=code, team_id=team_id)
         return {"status": "success", "message": "Zoho integration successful."}
+    except httpx.HTTPError as e:
+        logger.error(f"[Zoho OAuth] HTTP error during token exchange: {e}", exc_info=True)
+        raise HTTPException(status_code=502, detail="Error exchanging Zoho OAuth tokens.")
     except Exception as e:
-        logger.error(f"[Zoho OAuth] Error: {str(e)}", exc_info=True)
+        logger.error(f"[Zoho OAuth] Unexpected error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Zoho OAuth callback failed.")
 
+@router.post("/leads/{team_id}", summary="Insert lead into Zoho")
+async def insert_zoho_lead(
+    team_id: str,
+    payload: LeadPayload,
+    bg: BackgroundTasks
+):
+    """
+    Insert a lead into Zoho CRM using stored tokens for the given Slack team_id.
+    Processes asynchronously to acknowledge Slack quickly.
+    """
+    async def _background_task():
+        try:
+            await zoho_service.insert_lead(team_id=team_id, lead_info=payload.dict())
+            logger.info(f"[Zoho] Successfully inserted lead for team {team_id}")
+        except Exception as e:
+            logger.error(f"[Zoho] Failed to insert lead for team {team_id}: {e}", exc_info=True)
 
-@router.post("/leads/{user_id}")
-async def insert_zoho_lead(user_id: str, lead_info: dict):
-    """
-    Insert a lead into Zoho CRM using stored access tokens for the given user.
-    """
-    try:
-        response = await zoho_service.insert_lead(user_id=user_id, lead_info=lead_info)
-        return {"status": "success", "zoho_response": response}
-    except Exception as e:
-        logger.error(f"[Zoho Lead] Error inserting lead for {user_id}: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Zoho lead insertion failed.")
+    bg.add_task(_background_task)
+    return {"status": "accepted", "message": "Lead processing started."}

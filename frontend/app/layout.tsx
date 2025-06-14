@@ -5,8 +5,8 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Dragify Demo Agent',
-  description: 'AI-powered demo request management system',
+  title: 'Dragify AI Agent Dashboard',
+  description: 'Monitor lead processing, integrations, and system status for Dragify AI Agent',
 };
 
 export default function RootLayout({

@@ -13,20 +13,13 @@ async def fetch_from_postgres(
     location: str = "",
     property_type: str = "",
     bedrooms: str = "",
-    budget: int = 0
+    budget: int = 0,
+    first_name: str = "",
+    last_name: str = "",
+    phone: str = "",
+    team_id: str = ""
 ) -> dict:
-    """
-    Fetch projects from PostgreSQL that match the lead's preferences with some tolerance.
-
-    Args:
-        location (str): Preferred location
-        property_type (str): Type of property
-        bedrooms (str): Number of bedrooms
-        budget (int): Budget in EGP
-
-    Returns:
-        dict: Lead info + 'matched_projects' list
-    """
+    """Find matching projects from database. Returns enhanced lead info."""
     try:
         location = location.strip()
         property_type = property_type.strip().lower()
@@ -50,20 +43,31 @@ async def fetch_from_postgres(
             result = await session.execute(stmt)
             matched = result.scalars().all()
 
-        return {
+        lead_info_enhanced = {
+            "first_name": first_name,
+            "last_name": last_name,
+            "phone": phone,
             "location": location,
             "property_type": property_type,
             "bedrooms": bedrooms,
             "budget": budget,
+            "team_id": team_id,
             "matched_projects": [p.name for p in matched] if matched else []
         }
+
+        return lead_info_enhanced
 
     except Exception as e:
         logger.error(f"[fetch_from_postgres] Error: {str(e)}", exc_info=True)
         return {
+            "first_name": first_name,
+            "last_name": last_name,
+            "phone": phone,
             "location": location,
             "property_type": property_type,
             "bedrooms": bedrooms,
             "budget": budget,
+            "team_id": team_id,
             "matched_projects": []
         }
+

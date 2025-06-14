@@ -7,114 +7,114 @@ from app.config.llm import get_llm
 
 logger = logging.getLogger(__name__)
 
-@tool(return_direct=False)
-def extract_lead_info(message: str) -> dict:
-    """
-    Extract structured lead info from a sales rep's Slack message.
-    Output is a dictionary with:
-    - first_name
-    - last_name
-    - phone
-    - location
-    - property_type
-    - bedrooms
-    - budget (as an integer, e.g., 3500000)
-    """
+@tool
+def extract_lead_info(message: str, team_id: str) -> dict:
+    """Extract lead info from message. Returns dict with lead details."""
+    # Output keys
+    keys = [
+        'first_name', 'last_name', 'phone',
+        'location', 'property_type', 'bedrooms', 'budget'
+    ]
     try:
-        logger.info("Extracting lead info from message using LLM")
+        logger.info("extract_lead_info: invoking LLM")
         log_json("Incoming Message", {"message": message})
 
         llm = get_llm()
-        prompt = f"""Extract lead information from this sales message and return ONLY valid JSON.
+        prompt = (
+            "Extract JSON with exactly these keys: first_name, last_name, phone, "
+            "location, property_type, bedrooms, budget. Return only JSON.\n\n"
+            "For budget: Convert any format (5.5M, 2.3 million, 500K, etc.) to the raw number.\n"
+            "Examples: '5.5M' -> '5500000', '2.3 million' -> '2300000', '500K' -> '500000'\n\n"
+            f"Message: \"{message}\""
+        )
 
-Message: "{message}"
-
-Extract these exact fields (use empty string "" if not found, except budget which should default to 0 if missing):
-- first_name
-- last_name
-- phone
-- location
-- property_type
-- bedrooms
-- budget (in Egyptian Pounds as integer; convert '5M', '3.5M', etc. to 5000000, 3500000)
-
-Return ONLY this JSON format:
-{{"first_name": "", "last_name": "", "phone": "", "location": "", "property_type": "", "bedrooms": "", "budget": 0}}
-
-Examples:
-Input: "Spoke with Sarah Johnson about 3BR villa in New Cairo, budget 8M, her number 01234567890"
-Output: {{"first_name": "Sarah", "last_name": "Johnson", "phone": "01234567890", "location": "New Cairo", "property_type": "villa", "bedrooms": "3", "budget": 8000000}}
-
-Input: "She needs a 1 bedroom studio in Maadi. Budget 1M. Contact: 0100000000"
-Output: {{"first_name": "", "last_name": "", "phone": "0100000000", "location": "Maadi", "property_type": "studio", "bedrooms": "1", "budget": 1000000}}
-
-Now extract from the message above:"""
-
+        # Call synchronously
         response = llm.invoke(prompt)
-        if not response or not hasattr(response, "content"):
-            raise ValueError("Invalid LLM response")
+        text = getattr(response, 'content', '') or ''
+        text = text.strip()
 
-        text = response.content.strip()
-        if text.startswith("```json"):
-            text = text.replace("```json", "").replace("```", "").strip()
-        elif text.startswith("```"):
-            text = text.replace("```", "").strip()
+        # Remove code fences
+        text = re.sub(r"^```.*|```$", "", text, flags=re.M)
 
-        start_idx = text.find("{")
-        end_idx = text.rfind("}")
-        lead_info = {}
-        if start_idx != -1 and end_idx != -1:
+        # Extract JSON substring
+        start = text.find('{')
+        end = text.rfind('}')
+        data = {}
+        if start != -1 and end != -1:
+            raw = text[start:end+1]
             try:
-                lead_info = json.loads(text[start_idx:end_idx+1])
+                data = json.loads(raw)
             except json.JSONDecodeError:
-                json_candidates = re.findall(r"\{.*?\}", text, re.DOTALL)
-                for candidate in json_candidates:
+                for cand in re.findall(r"\{.*?\}", text, flags=re.S):
                     try:
-                        lead_info = json.loads(candidate)
+                        data = json.loads(cand)
                         break
                     except json.JSONDecodeError:
                         continue
 
-        required_keys = [
-            "first_name", "last_name", "phone",
-            "location", "property_type", "bedrooms", "budget"
-        ]
-        for key in required_keys:
-            if key != "budget":
-                lead_info[key] = str(lead_info.get(key, "") or "")
-            else:
-                budget_val = lead_info.get("budget", 0)
-                if isinstance(budget_val, str):
-                    budget_val = budget_val.upper().replace(" ", "")
-                    if budget_val.endswith("M"):
+        # Normalize and ensure keys
+        for k in keys:
+            val = data.get(k, "")
+            if k == 'budget':
+                s = str(val).upper().strip()
+                
+                # Enhanced budget parsing to handle various formats
+                # Remove common currency symbols and clean up
+                s = re.sub(r'[,$£€]', '', s)
+                s = s.replace(' ', '')
+                
+                # Handle millions: 5.5M, 2.3 million, 1.5 M, etc.
+                if 'M' in s or 'MILLION' in s:
+                    # Extract the number part before M/MILLION
+                    number_match = re.search(r'(\d+\.?\d*)', s)
+                    if number_match:
                         try:
-                            budget_val = float(budget_val[:-1]) * 1_000_000
-                        except ValueError:
-                            budget_val = 0
-                    elif re.match(r"^\d+(\.\d+)?$", budget_val):
-                        budget_val = float(budget_val)
+                            val = int(float(number_match.group(1)) * 1_000_000)
+                        except:
+                            val = 0
                     else:
-                        budget_val = 0
-                try:
-                    lead_info["budget"] = int(budget_val)
-                except:
-                    lead_info["budget"] = 0
+                        val = 0
+                        
+                # Handle thousands: 500K, 750 thousand, etc.
+                elif 'K' in s or 'THOUSAND' in s:
+                    number_match = re.search(r'(\d+\.?\d*)', s)
+                    if number_match:
+                        try:
+                            val = int(float(number_match.group(1)) * 1_000)
+                        except:
+                            val = 0
+                    else:
+                        val = 0
+                        
+                # Handle regular numbers: 3500000, 2500000, etc.
+                else:
+                    try:
+                        # Extract only digits and decimal points
+                        clean_number = re.sub(r'[^0-9\.]', '', s)
+                        if clean_number:
+                            val = int(float(clean_number))
+                        else:
+                            val = 0
+                    except:
+                        val = 0
+                        
+                data[k] = val
+            else:
+                data[k] = str(val or "")
 
-        word_to_num = {
-            "one": "1", "two": "2", "three": "3", "four": "4",
-            "five": "5", "six": "6", "seven": "7", "eight": "8"
-        }
-        b = lead_info.get("bedrooms", "").lower()
-        if b in word_to_num:
-            lead_info["bedrooms"] = word_to_num[b]
+        # Map bedroom words to numbers
+        mapping = {"one":"1","two":"2","three":"3","four":"4"}
+        b = data.get('bedrooms', '').lower()
+        data['bedrooms'] = mapping.get(b, data.get('bedrooms', '').strip())
 
-        log_json("Lead Info", lead_info)
-        return lead_info
+        # Inject team_id
+        data['team_id'] = team_id
+        log_json("Lead Info", data)
+        return data
 
     except Exception as e:
-        logger.error(f"extract_lead_info failed: {str(e)}", exc_info=True)
-        return {
-            "first_name": "", "last_name": "", "phone": "",
-            "location": "", "property_type": "", "bedrooms": "", "budget": 0
-        }
-
+        logger.error(f"extract_lead_info failed: {e}", exc_info=True)
+        # Fallback
+        fallback = {k: (0 if k == 'budget' else "") for k in keys}
+        fallback['team_id'] = team_id
+        return fallback

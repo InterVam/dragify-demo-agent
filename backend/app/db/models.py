@@ -1,66 +1,216 @@
-# app/db/models.py
 import uuid
-from sqlalchemy import Column, String, Integer, TIMESTAMP, text, ARRAY , Boolean , UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from datetime import datetime
+from sqlalchemy import (
+    Column, String, Integer, BigInteger, DateTime, Boolean, func, UniqueConstraint, text, JSON, Text
+)
+from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
 class Project(Base):
     __tablename__ = "projects"
-    id = Column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        nullable=False,
-        server_default=text("gen_random_uuid()")
+
+    id = Column(Integer, primary_key=True, nullable=False)
+    name = Column(String(255), nullable=False)
+    location = Column(String(255), nullable=True)
+    property_type = Column(String(100), nullable=True)
+    min_bedrooms = Column(Integer, nullable=True)
+    max_bedrooms = Column(Integer, nullable=True)
+    min_price = Column(BigInteger, nullable=True)
+    max_price = Column(BigInteger, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=True
     )
-    name = Column(String, nullable=False)
-    location = Column(String, nullable=False)
-    min_price = Column(Integer, nullable=False)
-    max_price = Column(Integer, nullable=False)
-    min_bedrooms = Column(Integer, nullable=False)
-    max_bedrooms = Column(Integer, nullable=False)
-    property_type = Column(String, nullable=False)
-    created_at = Column(TIMESTAMP, server_default=text("NOW()"))
 
 class Lead(Base):
     __tablename__ = "leads"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        nullable=False
+    )
     name = Column(String, nullable=True)
     phone = Column(String, nullable=True)
     location = Column(String, nullable=True)
     property_type = Column(String, nullable=True)
     bedrooms = Column(Integer, nullable=True)
     budget = Column(Integer, nullable=True)
-    matched_project_ids = Column(ARRAY(UUID(as_uuid=True)), nullable=True)
-    created_at = Column(TIMESTAMP, server_default=text("NOW()"))
+    matched_project_ids = Column(
+        ARRAY(UUID(as_uuid=True)),
+        nullable=True
+    )
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False
+    )
 
 class SlackInstallation(Base):
     __tablename__ = "slack_installations"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    team_id = Column(String, nullable=False, unique=True)  # Slack team/workspace ID
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        nullable=False
+    )
+    team_id = Column(
+        String,
+        nullable=False,
+        unique=True,
+        index=True,
+        doc="Slack workspace ID linked to installation"
+    )
     team_name = Column(String, nullable=True)
     bot_user_id = Column(String, nullable=True)
     access_token = Column(String, nullable=False)
-    installed = Column(Boolean, default=True)
-    created_at = Column(TIMESTAMP, server_default=text("NOW()"))
+    installed = Column(Boolean, nullable=False, default=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False
+    )
 
     __table_args__ = (
-        UniqueConstraint('team_id', name='uq_slack_team_id'),
+        UniqueConstraint('team_id', name='uq_slack_installations_team_id'),
     )
 
 class ZohoInstallation(Base):
+    """
+    Stores OAuth credentials and metadata for a Zoho CRM integration per Slack team.
+    """
     __tablename__ = "zoho_installations"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    team_id = Column(String, nullable=False, unique=True)  # Link to Slack team_id
-    access_token = Column(String, nullable=False)
-    refresh_token = Column(String, nullable=True)
-    api_domain = Column(String, nullable=True)
-    expires_at = Column(TIMESTAMP, nullable=True)
-    created_at = Column(TIMESTAMP, server_default=text("NOW()"))
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        unique=True,
+        nullable=False
+    )
+    team_id = Column(
+        String,
+        nullable=False,
+        unique=True,
+        index=True,
+        doc="Slack team ID linked to Zoho installation"
+    )
+    access_token = Column(
+        String,
+        nullable=False,
+        doc="Current Zoho OAuth access token"
+    )
+    refresh_token = Column(
+        String,
+        nullable=True,
+        doc="Refresh token to obtain new access tokens"
+    )
+    api_domain = Column(
+        String,
+        nullable=False,
+        default="https://www.zohoapis.com",
+        doc="Base domain for Zoho API endpoints"
+    )
+    expires_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        doc="UTC timestamp when the access token expires"
+    )
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+        doc="UTC timestamp when this record was created"
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+        doc="UTC timestamp when this record was last updated"
+    )
 
     __table_args__ = (
-        UniqueConstraint('team_id', name='uq_zoho_team_id'),
+        UniqueConstraint('team_id', name='uq_zoho_installations_team_id'),
     )
+
+class GmailInstallation(Base):
+    """
+    Stores OAuth credentials and metadata for Gmail integration per Slack team.
+    """
+    __tablename__ = "gmail_installations"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        unique=True,
+        nullable=False
+    )
+    team_id = Column(
+        String,
+        nullable=False,
+        unique=True,
+        index=True,
+        doc="Slack team ID linked to Gmail installation"
+    )
+    access_token = Column(
+        String,
+        nullable=False,
+        doc="Current Gmail OAuth access token"
+    )
+    refresh_token = Column(
+        String,
+        nullable=True,
+        doc="Refresh token to obtain new access tokens"
+    )
+    user_email = Column(
+        String,
+        nullable=True,
+        doc="Gmail user email address"
+    )
+    expires_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        doc="UTC timestamp when the access token expires"
+    )
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+        doc="UTC timestamp when this record was created"
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+        doc="UTC timestamp when this record was last updated"
+    )
+
+    __table_args__ = (
+        UniqueConstraint('team_id', name='uq_gmail_installations_team_id'),
+    )
+
+class EventLog(Base):
+    __tablename__ = "event_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    event_type = Column(String, nullable=False)  # lead_processed, crm_insertion, email_notification, etc.
+    event_data = Column(JSON, nullable=True)  # Store the actual event data
+    status = Column(String, nullable=False, default="processing")  # processing, success, error
+    error_message = Column(Text, nullable=True)
+    team_id = Column(String, nullable=True)  # Associated team/workspace
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
