@@ -115,15 +115,25 @@ async def run_migrations():
 # WebSocket endpoint for real-time logs
 @app.websocket("/ws/logs")
 async def websocket_logs(websocket: WebSocket):
-    await websocket.accept()
-    logger.info("WebSocket connection established for live logs")
+    # Log connection attempt details
+    client_host = websocket.client.host if websocket.client else "unknown"
+    origin = websocket.headers.get("origin", "unknown")
+    logger.info(f"WebSocket connection attempt from: {client_host}, origin: {origin}")
     
     try:
+        # Accept connection regardless of origin for now
+        await websocket.accept()
+        logger.info(f"WebSocket connection established for live logs from {client_host}")
+        
         await event_logger.subscribe_to_events(websocket)
     except WebSocketDisconnect:
-        logger.info("WebSocket connection closed")
+        logger.info(f"WebSocket connection closed from {client_host}")
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.error(f"WebSocket error from {client_host}: {e}")
+        try:
+            await websocket.close()
+        except:
+            pass
 
 # Health check endpoint
 @app.get("/health")

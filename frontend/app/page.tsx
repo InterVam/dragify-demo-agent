@@ -49,7 +49,10 @@ export default function Home() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-  const WS_URL = API_URL.replace("http", "ws");
+  // Properly handle WebSocket URL for both HTTP and HTTPS (ngrok)
+  // Remove trailing slash to avoid double slashes
+  const cleanApiUrl = API_URL.replace(/\/$/, '');
+  const WS_URL = cleanApiUrl.replace("https://", "wss://").replace("http://", "ws://");
 
   useEffect(() => {
     fetchLogs();
@@ -69,10 +72,11 @@ export default function Home() {
   const connectWebSocket = () => {
     try {
       setConnectionStatus("Connecting...");
+      console.log(`Attempting WebSocket connection to: ${WS_URL}/ws/logs`);
       const ws = new WebSocket(`${WS_URL}/ws/logs`);
       
       ws.onopen = () => {
-        console.log("WebSocket connected");
+        console.log("WebSocket connected successfully");
         setIsConnected(true);
         setConnectionStatus("Connected");
         wsRef.current = ws;
@@ -103,8 +107,8 @@ export default function Home() {
         }
       };
 
-      ws.onclose = () => {
-        console.log("WebSocket disconnected");
+      ws.onclose = (event) => {
+        console.log("WebSocket disconnected", event.code, event.reason);
         setIsConnected(false);
         setConnectionStatus("Disconnected");
         wsRef.current = null;

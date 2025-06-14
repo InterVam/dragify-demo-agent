@@ -58,24 +58,24 @@ services:
     networks:
       - dragify-network
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    depends_on:
-      - backend
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
-    environment:
-      NODE_ENV: development
-      NEXT_PUBLIC_API_URL: https://b63d-156-194-236-142.ngrok-free.app/
-    networks:
-      - dragify-network
-    command: sh -c "npm install && npm run dev"
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   depends_on:
+  #     - backend
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+  #     - /app/.next
+  #   environment:
+  #     NODE_ENV: development
+  #     NEXT_PUBLIC_API_URL: https://b63d-156-194-236-142.ngrok-free.app/
+  #   networks:
+  #     - dragify-network
+  #   command: sh -c "npm install && npm run dev"
 
 volumes:
   pgdata:
