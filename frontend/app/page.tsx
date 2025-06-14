@@ -133,7 +133,9 @@ export default function Home() {
   const fetchLogs = async () => {
     setRefreshing(true);
     try {
-      const response = await axios.get(`${API_URL}/api/logs`);
+      const response = await axios.get(`${API_URL}/api/logs`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
       setLogs(response.data.logs || []);
       setLoading(false);
     } catch (err) {
@@ -146,10 +148,11 @@ export default function Home() {
 
   const checkOAuthStatus = async () => {
     try {
+      const headers = { 'ngrok-skip-browser-warning': 'true' };
       const [slackRes, zohoRes, gmailRes] = await Promise.allSettled([
-        axios.get(`${API_URL}/slack/status`),
-        axios.get(`${API_URL}/zoho/status`),
-        axios.get(`${API_URL}/gmail/status`),
+        axios.get(`${API_URL}/slack/status`, { headers }),
+        axios.get(`${API_URL}/zoho/status`, { headers }),
+        axios.get(`${API_URL}/gmail/status`, { headers }),
       ]);
       setOauthStatus({
         slack: slackRes.status === "fulfilled" && slackRes.value.data.connected,
@@ -161,17 +164,35 @@ export default function Home() {
 
   const handleOAuth = async (service: string) => {
     try {
-      const response = await axios.get(`${API_URL}/${service}/oauth/authorize`);
+      console.log(`Attempting OAuth for ${service} with URL: ${API_URL}/${service}/oauth/authorize`);
+      const response = await axios.get(`${API_URL}/${service}/oauth/authorize`, {
+        headers: {
+          'ngrok-skip-browser-warning': 'true'
+        }
+      });
+      console.log(`OAuth response for ${service}:`, response.data);
+      
       const authUrl = response.data.auth_url || response.data.authorization_url;
       if (authUrl) {
+        console.log(`Opening OAuth URL: ${authUrl}`);
         window.open(authUrl, "_blank", "width=600,height=600");
+      } else {
+        console.error(`No auth URL found in response for ${service}:`, response.data);
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error(`OAuth error for ${service}:`, error);
+      if (axios.isAxiosError(error)) {
+        console.error(`Response status: ${error.response?.status}`);
+        console.error(`Response data:`, error.response?.data);
+      }
+    }
   };
 
   const createTestEvent = async () => {
     try {
-      await axios.post(`${API_URL}/api/test-event`);
+      await axios.post(`${API_URL}/api/test-event`, {}, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
     } catch (error) {
       console.error("Failed to create test event:", error);
     }
