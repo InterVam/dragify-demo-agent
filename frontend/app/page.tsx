@@ -115,12 +115,12 @@ export default function Home() {
     };
   }, [sessionId]);
 
-  // Separate useEffect for WebSocket connection that requires both session and team
+  // Separate useEffect for WebSocket connection that requires session (team is optional for new sessions)
   useEffect(() => {
-    if (sessionId && selectedTeam) {
+    if (sessionId) {
       connectWebSocket();
     } else {
-      // Close WebSocket if team is deselected
+      // Close WebSocket if session is lost
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
@@ -135,7 +135,7 @@ export default function Home() {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [sessionId, selectedTeam]);
+  }, [sessionId, selectedTeam]); // Keep selectedTeam as dependency to reconnect when team changes
 
   // Fetch logs when selected team changes
   useEffect(() => {
@@ -230,6 +230,10 @@ export default function Home() {
           
           if (data.type === "initial_events") {
             setLogs(data.events);
+          } else if (data.type === "welcome") {
+            // Handle welcome message for new sessions
+            setLogs([]); // Clear any existing logs
+            console.log("WebSocket welcome:", data.message);
           } else if (data.type === "event_update") {
             setLogs(prevLogs => {
               const existingIndex = prevLogs.findIndex(log => log.id === data.event.id);
@@ -239,8 +243,11 @@ export default function Home() {
                 newLogs[existingIndex] = data.event;
                 return newLogs;
               } else {
-                // Add new event to the beginning
-                return [data.event, ...prevLogs];
+                // Add new event to the beginning (only if we have a selected team or no team filter)
+                if (!selectedTeam || data.event.team_id === selectedTeam) {
+                  return [data.event, ...prevLogs];
+                }
+                return prevLogs; // Don't add events from other teams
               }
             });
           }

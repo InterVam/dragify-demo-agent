@@ -180,17 +180,23 @@ class EventLogger:
         
         try:
             # Send recent events on connection (filtered)
-            recent_events = self.get_live_events(20)
-            if recent_events:
-                # Filter events based on team_id if provided
-                if team_id:
-                    recent_events = [event for event in recent_events if event.get("team_id") == team_id]
+            if team_id:
+                # Send team-specific events
+                recent_events = self.get_live_events(20)
+                filtered_events = [event for event in recent_events if event.get("team_id") == team_id]
                 
-                if recent_events:  # Only send if we have events after filtering
+                if filtered_events:
                     await websocket.send_text(json.dumps({
                         "type": "initial_events",
-                        "events": recent_events
+                        "events": filtered_events
                     }))
+            else:
+                # For new sessions without team, send welcome message instead of events
+                await websocket.send_text(json.dumps({
+                    "type": "welcome",
+                    "message": "Connected! Select a team to view events.",
+                    "events": []
+                }))
             
             # Keep connection alive
             while True:
