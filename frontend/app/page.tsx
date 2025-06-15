@@ -192,8 +192,9 @@ export default function Home() {
   const connectWebSocket = () => {
     try {
       setConnectionStatus("Connecting...");
-      console.log(`Attempting WebSocket connection to: ${WS_URL}/ws/logs`);
-      const ws = new WebSocket(`${WS_URL}/ws/logs`);
+      const wsUrl = `${WS_URL}/ws/logs?session_id=${sessionId}&team_id=${selectedTeam}`;
+      console.log(`Attempting WebSocket connection to: ${wsUrl}`);
+      const ws = new WebSocket(wsUrl);
       
       ws.onopen = () => {
         console.log("WebSocket connected successfully");
@@ -233,10 +234,12 @@ export default function Home() {
         setConnectionStatus("Disconnected");
         wsRef.current = null;
         
-        // Attempt to reconnect after 3 seconds
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connectWebSocket();
-        }, 3000);
+        // Attempt to reconnect after 3 seconds (only if we have session and team)
+        if (sessionId && selectedTeam) {
+          reconnectTimeoutRef.current = setTimeout(() => {
+            connectWebSocket();
+          }, 3000);
+        }
       };
 
       ws.onerror = (error) => {

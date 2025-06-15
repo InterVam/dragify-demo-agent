@@ -168,17 +168,29 @@ class EventLogger:
         """Get recent events from in-memory store (faster for real-time)"""
         return list(self.live_events)[:limit]
     
-    async def subscribe_to_events(self, websocket):
-        """Subscribe to real-time event updates"""
-        self.subscribers.add(websocket)
+    async def subscribe_to_events(self, websocket, session_id: str = None, team_id: str = None):
+        """Subscribe to real-time event updates with optional filtering"""
+        # Store websocket with its filter criteria
+        websocket_info = {
+            "websocket": websocket,
+            "session_id": session_id,
+            "team_id": team_id
+        }
+        self.subscribers.add(websocket_info)
+        
         try:
-            # Send recent events on connection
+            # Send recent events on connection (filtered)
             recent_events = self.get_live_events(20)
             if recent_events:
-                await websocket.send_text(json.dumps({
-                    "type": "initial_events",
-                    "events": recent_events
-                }))
+                # Filter events based on team_id if provided
+                if team_id:
+                    recent_events = [event for event in recent_events if event.get("team_id") == team_id]
+                
+                if recent_events:  # Only send if we have events after filtering
+                    await websocket.send_text(json.dumps({
+                        "type": "initial_events",
+                        "events": recent_events
+                    }))
             
             # Keep connection alive
             while True:
@@ -187,10 +199,10 @@ class EventLogger:
         except Exception as e:
             logger.error(f"WebSocket subscription error: {e}")
         finally:
-            self.subscribers.discard(websocket)
+            self.subscribers.discard(websocket_info)
     
     async def _notify_subscribers(self, event_data: Dict[str, Any]):
-        """Notify all subscribers of new/updated events"""
+        """Notify all subscribers of new/updated events with filtering"""
         if not self.subscribers:
             return
             
@@ -201,11 +213,18 @@ class EventLogger:
         
         # Remove disconnected subscribers
         disconnected = set()
-        for subscriber in self.subscribers:
+        for subscriber_info in self.subscribers:
             try:
-                await subscriber.send_text(message)
+                websocket = subscriber_info["websocket"]
+                team_id = subscriber_info.get("team_id")
+                
+                # Filter events based on team_id if specified
+                if team_id and event_data.get("team_id") != team_id:
+                    continue  # Skip this event for this subscriber
+                
+                await websocket.send_text(message)
             except Exception:
-                disconnected.add(subscriber)
+                disconnected.add(subscriber_info)
         
         # Clean up disconnected subscribers
         self.subscribers -= disconnected
