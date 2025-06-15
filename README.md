@@ -80,13 +80,58 @@ docker-compose up --build
 docker-compose up --build -d
 ```
 
-### 4. Access the Application
+### 4. Expose Backend with ngrok (Required for OAuth & Webhooks)
+
+For OAuth callbacks and Slack webhooks to work properly, your backend needs to be accessible from the internet. Use ngrok to expose your local backend:
+
+#### Install ngrok
+1. **Download ngrok**: https://ngrok.com/download
+2. **Sign up** for a free account
+3. **Install and authenticate**:
+```bash
+# Install ngrok (example for macOS)
+brew install ngrok/ngrok/ngrok
+
+# Or download and extract from website
+# Authenticate with your token
+ngrok config add-authtoken YOUR_NGROK_TOKEN
+```
+
+#### Expose Backend
+```bash
+# In a new terminal, expose port 8000
+ngrok http 8000
+```
+
+You'll see output like:
+```
+Forwarding    https://abc123.ngrok-free.app -> http://localhost:8000
+```
+
+#### Update Environment Variables
+Update your `.env` file with the ngrok URL:
+```env
+# Replace localhost URLs with your ngrok URL
+SLACK_REDIRECT_URI=https://abc123.ngrok-free.app/slack/oauth/callback
+ZOHO_REDIRECT_URI=https://abc123.ngrok-free.app/zoho/oauth/callback
+GMAIL_REDIRECT_URI=https://abc123.ngrok-free.app/gmail/oauth/callback
+```
+
+#### Update Frontend Environment
+Create `frontend/.env.local`:
+```env
+NEXT_PUBLIC_API_URL=https://abc123.ngrok-free.app
+```
+
+### 5. Access the Application
 - **Frontend Dashboard**: http://localhost:3000
-- **Backend API**: http://localhost:8000
-- **API Documentation**: http://localhost:8000/docs
+- **Backend API**: https://abc123.ngrok-free.app (your ngrok URL)
+- **API Documentation**: https://abc123.ngrok-free.app/docs
 - **Database**: localhost:5432
 
 ## 🔐 OAuth Setup Guide
+
+⚠️ **Important**: Use your ngrok URL (e.g., `https://abc123.ngrok-free.app`) instead of `localhost` for all OAuth configurations below.
 
 ### Slack App Configuration
 
@@ -97,7 +142,7 @@ docker-compose up --build -d
 
 2. **OAuth & Permissions**
    - Navigate to "OAuth & Permissions"
-   - Add Redirect URL: `http://localhost:8000/slack/oauth/callback`
+   - Add Redirect URL: `https://abc123.ngrok-free.app/slack/oauth/callback` (use your ngrok URL)
    - Add Bot Token Scopes:
      - `app_mentions:read`
      - `channels:history`
@@ -108,7 +153,7 @@ docker-compose up --build -d
 
 3. **Event Subscriptions**
    - Enable Events: ON
-   - Request URL: `http://localhost:8000/slack/events`
+   - Request URL: `https://abc123.ngrok-free.app/slack/events` (use your ngrok URL)
    - Subscribe to bot events:
      - `app_mention`
      - `message.channels`
@@ -125,7 +170,7 @@ docker-compose up --build -d
    - Fill in app details
 
 2. **Configure OAuth**
-   - Authorized Redirect URI: `http://localhost:8000/zoho/oauth/callback`
+   - Authorized Redirect URI: `https://abc123.ngrok-free.app/zoho/oauth/callback` (use your ngrok URL)
    - Scopes: `ZohoCRM.modules.ALL`
 
 3. **Get Credentials**
@@ -141,7 +186,7 @@ docker-compose up --build -d
 2. **OAuth 2.0 Setup**
    - Go to "Credentials" → "Create Credentials" → "OAuth 2.0 Client IDs"
    - Application type: Web application
-   - Authorized redirect URI: `http://localhost:8000/gmail/oauth/callback`
+   - Authorized redirect URI: `https://abc123.ngrok-free.app/gmail/oauth/callback` (use your ngrok URL)
 
 3. **Get Credentials**
    - Download the JSON file or copy Client ID and Client Secret to your `.env` file
@@ -195,7 +240,61 @@ SELECT * FROM projects;
 \q
 ```
 
-#### Method 2: Using SQL File
+#### Method 2: Using CSV File (Recommended)
+
+The project includes a CSV file with real estate project data. Here's how to import it:
+
+1. **Copy CSV file to PostgreSQL container**:
+```bash
+docker cp backend/app/data/projects3.csv dragify-demo-agent-postgres-1:/tmp/projects.csv
+```
+
+2. **Import CSV data using COPY command**:
+```bash
+docker exec -it dragify-demo-agent-postgres-1 psql -U postgres -d mydb -c "
+COPY projects (name, location, min_budget, max_budget, bedrooms, bedrooms, property_type) 
+FROM '/tmp/projects.csv' 
+WITH (FORMAT csv, HEADER true, DELIMITER ',');
+"
+```
+
+**Note**: The CSV has `min_price,max_price,min_bedrooms,max_bedrooms` but our table uses `min_budget,max_budget,bedrooms`. We'll use the average of min/max bedrooms for the bedrooms field.
+
+3. **Alternative: Import with data transformation**:
+```bash
+docker exec -it dragify-demo-agent-postgres-1 psql -U postgres -d mydb -c "
+CREATE TEMP TABLE temp_projects (
+    name VARCHAR(255),
+    location VARCHAR(255),
+    min_price BIGINT,
+    max_price BIGINT,
+    min_bedrooms INTEGER,
+    max_bedrooms INTEGER,
+    property_type VARCHAR(100)
+);
+
+COPY temp_projects FROM '/tmp/projects.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+
+INSERT INTO projects (name, location, property_type, bedrooms, min_budget, max_budget)
+SELECT 
+    name,
+    location,
+    property_type,
+    ROUND((min_bedrooms + max_bedrooms) / 2.0) as bedrooms,
+    min_price as min_budget,
+    max_price as max_budget
+FROM temp_projects;
+
+DROP TABLE temp_projects;
+"
+```
+
+4. **Verify the import**:
+```bash
+docker exec -it dragify-demo-agent-postgres-1 psql -U postgres -d mydb -c "SELECT COUNT(*) FROM projects;"
+```
+
+#### Method 3: Using SQL File (Manual Data)
 
 1. **Create a SQL file** (`sample_data.sql`):
 ```sql
@@ -369,6 +468,11 @@ dragify-demo-agent/
 4. **CORS Issues**
    - Frontend and backend CORS settings are configured
    - Check browser console for specific errors
+
+5. **ngrok Issues**
+   - Ensure ngrok is running and accessible
+   - Update OAuth redirect URIs when ngrok URL changes
+   - Check ngrok dashboard for request logs: https://dashboard.ngrok.com/
 
 ### Viewing Logs
 
