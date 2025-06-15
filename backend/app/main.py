@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from app.api import slack
 from app.api import zoho
 from app.api import gmail
+from app.api import teams
 from app.db.session import engine
 from app.db.models import Base
 from app.config.slack_config import SlackConfig
@@ -51,6 +52,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(teams.router)
 app.include_router(slack.router)
 app.include_router(zoho.router)
 app.include_router(gmail.router)

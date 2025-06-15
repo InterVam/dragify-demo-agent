@@ -27,23 +27,37 @@ interface LeadData {
   matched_projects?: string[];
 }
 
+interface Team {
+  team_id: string;
+  team_name: string;
+  domain?: string;
+  created_at: string;
+  integrations: {
+    slack: { connected: boolean; installed: boolean };
+    zoho: { connected: boolean; expires_at?: string };
+    gmail: { connected: boolean; user_email?: string; expires_at?: string; is_expired?: boolean };
+  };
+}
+
 interface OAuthStatus {
-  slack: boolean;
-  zoho: boolean;
-  gmail: boolean;
+  slack: { connected: boolean; configured: boolean };
+  zoho: { connected: boolean; configured: boolean };
+  gmail: { connected: boolean; configured: boolean; user_email?: string };
 }
 
 export default function Home() {
   const [logs, setLogs] = useState<Log[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [selectedTeam, setSelectedTeam] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<string>("Disconnected");
   const [oauthStatus, setOauthStatus] = useState<OAuthStatus>({
-    slack: false,
-    zoho: false,
-    gmail: false,
+    slack: { connected: false, configured: true },
+    zoho: { connected: false, configured: true },
+    gmail: { connected: false, configured: true },
   });
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -55,8 +69,7 @@ export default function Home() {
   const WS_URL = cleanApiUrl.replace("https://", "wss://").replace("http://", "ws://");
 
   useEffect(() => {
-    fetchLogs();
-    checkOAuthStatus();
+    fetchTeams();
     connectWebSocket();
 
     return () => {
@@ -68,6 +81,35 @@ export default function Home() {
       }
     };
   }, []);
+
+  // Fetch logs when selected team changes
+  useEffect(() => {
+    if (selectedTeam) {
+      fetchLogs();
+      checkOAuthStatus();
+    }
+  }, [selectedTeam]);
+
+  const fetchTeams = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/teams/`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
+      const teamsData = response.data.teams || [];
+      setTeams(teamsData);
+      
+      // Auto-select first team if available
+      if (teamsData.length > 0 && !selectedTeam) {
+        setSelectedTeam(teamsData[0].team_id);
+      }
+      
+      setLoading(false);
+    } catch (err) {
+      console.error("Failed to fetch teams:", err);
+      setError("Failed to fetch teams");
+      setLoading(false);
+    }
+  };
 
   const connectWebSocket = () => {
     try {
@@ -131,41 +173,42 @@ export default function Home() {
   };
 
   const fetchLogs = async () => {
+    if (!selectedTeam) return;
+    
     setRefreshing(true);
     try {
-      const response = await axios.get(`${API_URL}/api/logs`, {
+      const response = await axios.get(`${API_URL}/api/logs?team_id=${selectedTeam}`, {
         headers: { 'ngrok-skip-browser-warning': 'true' }
       });
       setLogs(response.data.logs || []);
-      setLoading(false);
     } catch (err) {
       setError("Failed to fetch logs");
-      setLoading(false);
     } finally {
       setRefreshing(false);
     }
   };
 
   const checkOAuthStatus = async () => {
+    if (!selectedTeam) return;
+    
     try {
       const headers = { 'ngrok-skip-browser-warning': 'true' };
-      const [slackRes, zohoRes, gmailRes] = await Promise.allSettled([
-        axios.get(`${API_URL}/slack/status`, { headers }),
-        axios.get(`${API_URL}/zoho/status`, { headers }),
-        axios.get(`${API_URL}/gmail/status`, { headers }),
-      ]);
-      setOauthStatus({
-        slack: slackRes.status === "fulfilled" && slackRes.value.data.connected,
-        zoho: zohoRes.status === "fulfilled" && zohoRes.value.data.connected,
-        gmail: gmailRes.status === "fulfilled" && gmailRes.value.data.connected,
-      });
-    } catch (err) {}
+      const response = await axios.get(`${API_URL}/teams/${selectedTeam}/integrations`, { headers });
+      setOauthStatus(response.data);
+    } catch (err) {
+      console.error("Failed to check OAuth status:", err);
+    }
   };
 
   const handleOAuth = async (service: string) => {
+    if (!selectedTeam) {
+      alert("Please select a team first");
+      return;
+    }
+    
     try {
-      console.log(`Attempting OAuth for ${service} with URL: ${API_URL}/${service}/oauth/authorize`);
-      const response = await axios.get(`${API_URL}/${service}/oauth/authorize`, {
+      console.log(`Attempting OAuth for ${service} with team ${selectedTeam}`);
+      const response = await axios.get(`${API_URL}/${service}/oauth/authorize?team_id=${selectedTeam}`, {
         headers: {
           'ngrok-skip-browser-warning': 'true'
         }
@@ -189,13 +232,27 @@ export default function Home() {
   };
 
   const createTestEvent = async () => {
+    if (!selectedTeam) {
+      alert("Please select a team first");
+      return;
+    }
+    
     try {
-      await axios.post(`${API_URL}/api/test-event`, {}, {
+      await axios.post(`${API_URL}/api/test-event`, { team_id: selectedTeam }, {
         headers: { 'ngrok-skip-browser-warning': 'true' }
       });
     } catch (error) {
       console.error("Failed to create test event:", error);
     }
+  };
+
+  const handleTeamChange = (teamId: string) => {
+    setSelectedTeam(teamId);
+    setLogs([]); // Clear logs when switching teams
+  };
+
+  const getCurrentTeam = () => {
+    return teams.find(team => team.team_id === selectedTeam);
   };
 
   const formatBudget = (budget: number) => {
@@ -214,7 +271,7 @@ export default function Home() {
   };
 
   const getConnectedCount = () => {
-    return Object.values(oauthStatus).filter(Boolean).length;
+    return [oauthStatus.slack, oauthStatus.zoho, oauthStatus.gmail].filter(status => status.connected).length;
   };
 
   if (loading) {
@@ -238,12 +295,47 @@ export default function Home() {
       <div className="bg-white/10 backdrop-blur-md border-b border-white/20 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-blue-200 bg-clip-text text-transparent">
-                Dragify AI Agent
-              </h1>
-              <p className="text-blue-200 mt-1">Real Estate Lead Processing Dashboard</p>
+            <div className="flex items-center space-x-6">
+              <div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-blue-200 bg-clip-text text-transparent">
+                  Dragify AI Agent
+                </h1>
+                <p className="text-blue-200 mt-1">Real Estate Lead Processing Dashboard</p>
+              </div>
+              
+              {/* Team Selector */}
+              {teams.length > 0 && (
+                <div className="flex items-center space-x-3">
+                  <div className="text-sm text-blue-200">Team:</div>
+                  <select
+                    value={selectedTeam}
+                    onChange={(e) => handleTeamChange(e.target.value)}
+                    className="bg-white/10 backdrop-blur-md border border-white/20 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                  >
+                    <option value="" className="bg-slate-800 text-white">Select Team</option>
+                    {teams.map((team) => (
+                      <option key={team.team_id} value={team.team_id} className="bg-slate-800 text-white">
+                        {team.team_name || team.team_id}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  {/* Current Team Info */}
+                  {selectedTeam && getCurrentTeam() && (
+                    <div className="bg-blue-500/20 backdrop-blur-sm border border-blue-400/30 rounded-lg px-3 py-2">
+                      <div className="text-xs text-blue-200">Current Team</div>
+                      <div className="text-sm font-medium text-white">
+                        {getCurrentTeam()?.team_name || selectedTeam}
+                      </div>
+                      {getCurrentTeam()?.domain && (
+                        <div className="text-xs text-blue-300">{getCurrentTeam()?.domain}</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
+            
             <div className="flex items-center space-x-4">
               <div className={`flex items-center space-x-2 border rounded-full px-4 py-2 backdrop-blur-sm ${
                 isConnected 
@@ -261,7 +353,8 @@ export default function Home() {
               </div>
               <button
                 onClick={createTestEvent}
-                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 transform hover:scale-105 shadow-lg"
+                disabled={!selectedTeam}
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
               >
                 Test Event
               </button>
@@ -270,8 +363,8 @@ export default function Home() {
                   fetchLogs();
                   checkOAuthStatus();
                 }}
-                disabled={refreshing}
-                className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:transform-none"
+                disabled={refreshing || !selectedTeam}
+                className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:transform-none disabled:cursor-not-allowed"
               >
                 <span>{refreshing ? "Refreshing..." : "Refresh"}</span>
               </button>
@@ -342,25 +435,28 @@ export default function Home() {
                       <p className="text-sm text-blue-200">{service.description}</p>
                     </div>
                   </div>
-                  <div className={`w-3 h-3 rounded-full ${oauthStatus[service.key as keyof OAuthStatus] ? "bg-green-400 shadow-lg shadow-green-400/50" : "bg-slate-400"} animate-pulse`}></div>
+                  <div className={`w-3 h-3 rounded-full ${oauthStatus[service.key as keyof OAuthStatus]?.connected ? "bg-green-400 shadow-lg shadow-green-400/50" : "bg-slate-400"} animate-pulse`}></div>
                 </div>
                 
                 <div className="mb-4">
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${oauthStatus[service.key as keyof OAuthStatus] ? "bg-green-500/20 text-green-300 border border-green-400/30" : "bg-slate-500/20 text-slate-300 border border-slate-400/30"}`}>
-                    {oauthStatus[service.key as keyof OAuthStatus] ? "✓ Connected" : "○ Not Connected"}
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${oauthStatus[service.key as keyof OAuthStatus]?.connected ? "bg-green-500/20 text-green-300 border border-green-400/30" : "bg-slate-500/20 text-slate-300 border border-slate-400/30"}`}>
+                    {oauthStatus[service.key as keyof OAuthStatus]?.connected ? "✓ Connected" : "○ Not Connected"}
+                    {service.key === "gmail" && oauthStatus.gmail.user_email && (
+                      <span className="ml-2 text-xs opacity-75">({oauthStatus.gmail.user_email})</span>
+                    )}
                     </span>
                 </div>
                 
                 <button
                   onClick={() => handleOAuth(service.key)}
-                  disabled={oauthStatus[service.key as keyof OAuthStatus]}
+                  disabled={oauthStatus[service.key as keyof OAuthStatus]?.connected}
                   className={`w-full px-4 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 ${
-                    oauthStatus[service.key as keyof OAuthStatus]
+                    oauthStatus[service.key as keyof OAuthStatus]?.connected
                       ? "bg-slate-600/50 text-slate-400 cursor-not-allowed"
                       : `bg-gradient-to-r ${service.gradient} hover:shadow-lg text-white shadow-md`
                   }`}
                 >
-                  {oauthStatus[service.key as keyof OAuthStatus] ? "Connected" : `Connect ${service.name}`}
+                  {oauthStatus[service.key as keyof OAuthStatus]?.connected ? "Connected" : `Connect ${service.name}`}
                 </button>
               </div>
             ))}
