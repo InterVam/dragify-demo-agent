@@ -2,6 +2,7 @@ from fastapi import APIRouter, Request, HTTPException, Response
 from app.services.slack_service import SlackService
 from app.db.crud import get_slack_token_by_team
 from app.config.slack_config import SlackConfig
+from app.utils.session import SessionManager
 import json
 import logging
 from typing import Dict, Any
@@ -15,17 +16,25 @@ slack_service = SlackService()
 # ========== Routes ==========
 
 @router.get("/status")
-async def slack_status():
-    """Check if Slack is connected for any team"""
+async def slack_status(team_id: str = None):
+    """Check if Slack is connected for a specific team or any team"""
     try:
-        # For demo purposes, check if we have any Slack installations
-        # In a real app, you'd check for a specific team
-        token = await get_slack_token_by_team("T090NR297QD")  # Demo team ID
-        return {
-            "connected": bool(token),
-            "service": "slack",
-            "configured": bool(SlackConfig.CLIENT_ID)
-        }
+        if team_id:
+            # Check for specific team
+            token = await get_slack_token_by_team(team_id)
+            return {
+                "connected": bool(token),
+                "service": "slack",
+                "configured": bool(SlackConfig.CLIENT_ID),
+                "team_id": team_id
+            }
+        else:
+            # When no team is specified, return basic configuration status
+            return {
+                "connected": False,
+                "service": "slack",
+                "configured": bool(SlackConfig.CLIENT_ID)
+            }
     except Exception as e:
         logger.error(f"Slack status check error: {e}")
         return {
@@ -36,16 +45,23 @@ async def slack_status():
         }
 
 @router.get("/oauth/authorize")
-async def slack_oauth_authorize():
+async def slack_oauth_authorize(request: Request):
     """Redirect to Slack OAuth authorization"""
     if not SlackConfig.CLIENT_ID:
         raise HTTPException(status_code=400, detail="Slack not configured")
+    
+    # Try to get session ID from request, but don't require it for now
+    session_id = SessionManager.get_session_id_from_request(request)
+    if not session_id:
+        # Generate a temporary session ID for this OAuth flow
+        session_id = SessionManager.generate_session_id()
     
     auth_url = (
         f"https://slack.com/oauth/v2/authorize"
         f"?client_id={SlackConfig.CLIENT_ID}"
         f"&scope=app_mentions:read,channels:history,chat:write,im:history,im:read,im:write"
         f"&redirect_uri={SlackConfig.REDIRECT_URI}"
+        f"&state={session_id}"
     )
     
     return {"auth_url": auth_url}
@@ -77,9 +93,14 @@ async def handle_slack_events(request: Request) -> Dict[str, Any]:
 
 
 @router.get("/oauth/callback")
-async def slack_oauth_callback(code: str):
+async def slack_oauth_callback(code: str, state: str = None):
     try:
-        result = await slack_service.handle_oauth_callback(code)
+        # Get session ID from OAuth state parameter
+        session_id = state
+        if not session_id:
+            raise HTTPException(status_code=400, detail="Missing session state")
+        
+        result = await slack_service.handle_oauth_callback(code, session_id)
         if result.get("status") == "error":
             raise HTTPException(status_code=400, detail=result.get("message", "OAuth failed"))
         return {"status": "success", "message": "Slack integration successful"}

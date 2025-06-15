@@ -5,6 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.db.session import AsyncSessionLocal
 from app.db.models import ZohoInstallation
 from sqlalchemy import select
+from app.db.crud import ensure_team_exists
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,9 @@ class ZohoService:
         expires_in = int(data.get("expires_in", 0))
         
         try:
+            # First, ensure the team exists
+            await ensure_team_exists(team_id)
+            
             async with AsyncSessionLocal() as session:
                 stmt = select(ZohoInstallation).where(ZohoInstallation.team_id == team_id)
                 result = await session.execute(stmt)
@@ -79,6 +83,7 @@ class ZohoService:
                     ))
 
                 await session.commit()
+                logger.info(f"[ZohoService] Stored tokens for team {team_id}")
         except SQLAlchemyError as e:
             logger.error(f"[ZohoService] Database error during token storage: {e}")
             raise

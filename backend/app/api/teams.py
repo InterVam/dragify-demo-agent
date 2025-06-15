@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from typing import List, Dict, Any
@@ -6,24 +6,67 @@ import logging
 
 from app.db.session import AsyncSessionLocal
 from app.db.models import Team, SlackInstallation, ZohoInstallation, GmailInstallation, EventLog
+from app.db.crud import get_teams_by_session, get_team_by_id_and_session
+from app.utils.session import SessionManager
 from datetime import datetime
 
 router = APIRouter(prefix="/teams", tags=["Teams"])
 logger = logging.getLogger(__name__)
 
-@router.get("/", summary="List all teams")
-async def list_teams():
+@router.post("/init-session", summary="Initialize user session")
+async def init_session(request: Request):
     """
-    Get all teams with their integration status
+    Initialize a new session for the user
+    Returns a session ID that should be used in subsequent requests
     """
     try:
+        # Generate new session ID
+        session_id = SessionManager.generate_session_id()
+        
+        # Create browser fingerprint for additional validation
+        fingerprint = SessionManager.create_browser_fingerprint(request)
+        
+        logger.info(f"Initialized new session: {session_id} with fingerprint: {fingerprint}")
+        
+        return {
+            "session_id": session_id,
+            "fingerprint": fingerprint,
+            "message": "Session initialized successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error initializing session: {e}")
+        raise HTTPException(status_code=500, detail="Failed to initialize session")
+
+
+
+@router.get("/", summary="List teams for current session")
+async def list_teams(request: Request):
+    """
+    Get teams associated with the current session
+    """
+    try:
+        # Try to get session ID from request
+        session_id = SessionManager.get_session_id_from_request(request)
+        
         async with AsyncSessionLocal() as session:
-            # Get all teams with their integrations
-            stmt = select(Team).options(
-                selectinload(Team.slack_installation),
-                selectinload(Team.zoho_installation),
-                selectinload(Team.gmail_installation)
-            ).where(Team.is_active == True).order_by(Team.created_at.desc())
+            if session_id:
+                # Get teams for this session with their integrations
+                stmt = select(Team).options(
+                    selectinload(Team.slack_installation),
+                    selectinload(Team.zoho_installation),
+                    selectinload(Team.gmail_installation)
+                ).where(
+                    Team.session_id == session_id,
+                    Team.is_active == True
+                ).order_by(Team.created_at.desc())
+            else:
+                # Fallback: get all teams (for backward compatibility)
+                stmt = select(Team).options(
+                    selectinload(Team.slack_installation),
+                    selectinload(Team.zoho_installation),
+                    selectinload(Team.gmail_installation)
+                ).where(Team.is_active == True).order_by(Team.created_at.desc())
             
             result = await session.execute(stmt)
             teams = result.scalars().all()
@@ -74,17 +117,32 @@ async def list_teams():
         raise HTTPException(status_code=500, detail="Failed to list teams")
 
 @router.get("/{team_id}", summary="Get team details")
-async def get_team(team_id: str):
+async def get_team(team_id: str, request: Request):
     """
-    Get detailed information about a specific team
+    Get detailed information about a specific team (session-filtered)
     """
     try:
+        # Try to get session ID from request
+        session_id = SessionManager.get_session_id_from_request(request)
+        
         async with AsyncSessionLocal() as session:
-            stmt = select(Team).options(
-                selectinload(Team.slack_installation),
-                selectinload(Team.zoho_installation),
-                selectinload(Team.gmail_installation)
-            ).where(Team.team_id == team_id)
+            if session_id:
+                # Filter by session if we have one
+                stmt = select(Team).options(
+                    selectinload(Team.slack_installation),
+                    selectinload(Team.zoho_installation),
+                    selectinload(Team.gmail_installation)
+                ).where(
+                    Team.team_id == team_id,
+                    Team.session_id == session_id
+                )
+            else:
+                # Fallback: get team without session filter (backward compatibility)
+                stmt = select(Team).options(
+                    selectinload(Team.slack_installation),
+                    selectinload(Team.zoho_installation),
+                    selectinload(Team.gmail_installation)
+                ).where(Team.team_id == team_id)
             
             result = await session.execute(stmt)
             team = result.scalar_one_or_none()
@@ -193,17 +251,32 @@ async def ensure_team_exists(team_id: str, team_name: str = None, domain: str = 
         raise HTTPException(status_code=500, detail="Failed to ensure team exists")
 
 @router.get("/{team_id}/integrations", summary="Get team integration status")
-async def get_team_integrations(team_id: str):
+async def get_team_integrations(team_id: str, request: Request):
     """
-    Get integration status for a specific team (used by frontend)
+    Get integration status for a specific team (session-filtered)
     """
     try:
+        # Try to get session ID from request
+        session_id = SessionManager.get_session_id_from_request(request)
+        
         async with AsyncSessionLocal() as session:
-            stmt = select(Team).options(
-                selectinload(Team.slack_installation),
-                selectinload(Team.zoho_installation),
-                selectinload(Team.gmail_installation)
-            ).where(Team.team_id == team_id)
+            if session_id:
+                # Filter by session if we have one
+                stmt = select(Team).options(
+                    selectinload(Team.slack_installation),
+                    selectinload(Team.zoho_installation),
+                    selectinload(Team.gmail_installation)
+                ).where(
+                    Team.team_id == team_id,
+                    Team.session_id == session_id
+                )
+            else:
+                # Fallback: get team without session filter (backward compatibility)
+                stmt = select(Team).options(
+                    selectinload(Team.slack_installation),
+                    selectinload(Team.zoho_installation),
+                    selectinload(Team.gmail_installation)
+                ).where(Team.team_id == team_id)
             
             result = await session.execute(stmt)
             team = result.scalar_one_or_none()

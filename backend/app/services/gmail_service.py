@@ -17,6 +17,7 @@ from app.db.session import AsyncSessionLocal
 from app.db.models import GmailInstallation
 from app.config.gmail_config import GmailConfig
 from sqlalchemy import select
+from app.db.crud import ensure_team_exists
 
 logger = logging.getLogger(__name__)
 
@@ -100,8 +101,11 @@ class GmailService:
             return ""
 
     async def _store_tokens(self, team_id: str, credentials: Credentials, user_email: str):
-        """Store or update Gmail tokens in database"""
+        """Store or update Gmail tokens in database and ensure team exists"""
         try:
+            # First, ensure the team exists
+            await ensure_team_exists(team_id)
+            
             async with AsyncSessionLocal() as session:
                 stmt = select(GmailInstallation).where(GmailInstallation.team_id == team_id)
                 result = await session.execute(stmt)
@@ -128,6 +132,7 @@ class GmailService:
                     ))
 
                 await session.commit()
+                logger.info(f"[GmailService] Stored tokens for team {team_id}")
         except SQLAlchemyError as e:
             logger.error(f"[GmailService] Database error storing tokens: {e}")
             raise

@@ -1,8 +1,28 @@
+"""
+Event Logger Service
+
+Provides comprehensive event logging and real-time streaming capabilities for the Dragify AI Agent.
+
+Key Features:
+- Database persistence of all events with status tracking
+- In-memory event store for fast real-time updates (bounded to 1000 events)
+- WebSocket subscriptions for live dashboard updates
+- Automatic timeout handling for stuck "processing" events (5-minute default)
+- Background monitoring task that runs every minute
+- Session-based event filtering for multi-user support
+
+Event Lifecycle:
+1. Events start with "processing" status
+2. Updated to "success" or "error" based on workflow outcome
+3. Automatically marked as "error" if processing exceeds timeout
+4. Real-time notifications sent to all WebSocket subscribers
+"""
+
 import logging
 import asyncio
 from typing import Dict, Any, Optional, List
-from datetime import datetime
-from sqlalchemy import select, desc
+from datetime import datetime, timedelta
+from sqlalchemy import select, desc, and_
 from app.db.session import AsyncSessionLocal
 from app.db.models import EventLog
 from collections import deque
@@ -15,6 +35,8 @@ class EventLogger:
         # In-memory store for real-time updates (bounded to prevent memory leaks)
         self.live_events = deque(maxlen=1000)
         self.subscribers = set()
+        self.timeout_task = None
+        self.timeout_minutes = 5  # Timeout after 5 minutes
     
     async def log_event(
         self, 
@@ -187,6 +209,99 @@ class EventLogger:
         
         # Clean up disconnected subscribers
         self.subscribers -= disconnected
+
+    async def start_timeout_monitor(self, timeout_minutes: int = None):
+        """Start the background task to monitor for timed-out events"""
+        if timeout_minutes is not None:
+            self.timeout_minutes = timeout_minutes
+            
+        if self.timeout_task is None:
+            self.timeout_task = asyncio.create_task(self._timeout_monitor_loop())
+            logger.info(f"Event timeout monitor started (timeout: {self.timeout_minutes} minutes)")
+
+    async def stop_timeout_monitor(self):
+        """Stop the background timeout monitor"""
+        if self.timeout_task:
+            self.timeout_task.cancel()
+            try:
+                await self.timeout_task
+            except asyncio.CancelledError:
+                pass
+            self.timeout_task = None
+            logger.info("Event timeout monitor stopped")
+
+    def get_timeout_config(self) -> dict:
+        """Get current timeout configuration"""
+        return {
+            "timeout_minutes": self.timeout_minutes,
+            "monitor_running": self.timeout_task is not None and not self.timeout_task.done()
+        }
+
+    async def _timeout_monitor_loop(self):
+        """Background loop to check for timed-out events"""
+        while True:
+            try:
+                await self._check_and_timeout_events()
+                # Check every minute for timed-out events
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in timeout monitor: {e}")
+                await asyncio.sleep(60)  # Continue checking even if there's an error
+
+    async def _check_and_timeout_events(self):
+        """Check for events that have been processing too long and mark them as errored"""
+        try:
+            cutoff_time = datetime.utcnow() - timedelta(minutes=self.timeout_minutes)
+            
+            async with AsyncSessionLocal() as session:
+                # Find events that are still "processing" and older than timeout
+                stmt = select(EventLog).where(
+                    and_(
+                        EventLog.status == "processing",
+                        EventLog.created_at < cutoff_time
+                    )
+                )
+                
+                result = await session.execute(stmt)
+                timed_out_events = result.scalars().all()
+                
+                if timed_out_events:
+                    logger.info(f"Found {len(timed_out_events)} timed-out events")
+                    
+                    for event in timed_out_events:
+                        # Update status to error
+                        event.status = "error"
+                        event.error_message = f"Event timed out after {self.timeout_minutes} minutes"
+                        
+                        # Update in-memory store and notify subscribers
+                        updated_event = {
+                            "id": event.id,
+                            "event_type": event.event_type,
+                            "event_data": event.event_data,
+                            "status": event.status,
+                            "error_message": event.error_message,
+                            "team_id": event.team_id,
+                            "created_at": event.created_at.isoformat(),
+                            "updated_at": event.updated_at.isoformat()
+                        }
+                        
+                        # Update in live_events deque
+                        for i, live_event in enumerate(self.live_events):
+                            if live_event["id"] == event.id:
+                                self.live_events[i] = updated_event
+                                break
+                        
+                        # Notify subscribers
+                        await self._notify_subscribers(updated_event)
+                        
+                        logger.warning(f"Event {event.id} ({event.event_type}) timed out after {self.timeout_minutes} minutes")
+                    
+                    await session.commit()
+                    
+        except Exception as e:
+            logger.error(f"Error checking for timed-out events: {e}")
 
 # Global event logger instance
 event_logger = EventLogger() 

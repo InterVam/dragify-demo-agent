@@ -9,6 +9,7 @@ from app.services.zoho_service import ZohoService
 from app.config.zoho_config import ZohoConfig
 from app.db.session import AsyncSessionLocal
 from app.db.models import ZohoInstallation
+from app.utils.session import SessionManager
 
 router = APIRouter(prefix="/zoho", tags=["Zoho"])
 logger = logging.getLogger(__name__)
@@ -33,18 +34,26 @@ class LeadPayload(BaseModel):
     team_id: str
 
 @router.get("/status")
-async def zoho_status():
-    """Check if Zoho is connected for any team"""
+async def zoho_status(team_id: str = None):
+    """Check if Zoho is connected for a specific team"""
     try:
+        if not team_id:
+            return {
+                "connected": False,
+                "service": "zoho",
+                "configured": bool(config.client_id)
+            }
+            
         async with AsyncSessionLocal() as session:
-            stmt = select(ZohoInstallation).where(ZohoInstallation.team_id == "T090NR297QD")
+            stmt = select(ZohoInstallation).where(ZohoInstallation.team_id == team_id)
             result = await session.execute(stmt)
             installation = result.scalar_one_or_none()
             
         return {
             "connected": bool(installation and installation.access_token),
             "service": "zoho",
-            "configured": bool(config.client_id)
+            "configured": bool(config.client_id),
+            "team_id": team_id
         }
     except Exception as e:
         logger.error(f"Zoho status check error: {e}")
@@ -56,12 +65,25 @@ async def zoho_status():
         }
 
 @router.get("/oauth/authorize")
-async def zoho_oauth_authorize():
+async def zoho_oauth_authorize(team_id: str, request: Request):
     """Get Zoho OAuth authorization URL"""
     if not config.client_id:
         raise HTTPException(status_code=400, detail="Zoho not configured")
     
-    team_id = "T090NR297QD"  # Demo team ID
+    if not team_id:
+        raise HTTPException(status_code=400, detail="team_id is required")
+    
+    # Try to get session ID, but don't require it for now (backward compatibility)
+    session_id = SessionManager.get_session_id_from_request(request)
+    
+    # If we have a session ID, validate team access
+    if session_id:
+        from app.db.crud import get_team_by_id_and_session
+        async with AsyncSessionLocal() as session:
+            team = await get_team_by_id_and_session(team_id, session_id)
+            if not team:
+                raise HTTPException(status_code=403, detail="Team not found or access denied")
+    
     auth_url = zoho_service.get_authorization_url(team_id)
     
     return {"auth_url": auth_url}

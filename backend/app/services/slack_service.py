@@ -154,7 +154,7 @@ class SlackService:
         except Exception as e:
             logger.error(f"Error handling Slack event: {e}", exc_info=True)
 
-    async def handle_oauth_callback(self, code: str) -> dict:
+    async def handle_oauth_callback(self, code: str, session_id: str = None) -> dict:
         slack = WebClient()
         try:
             resp = slack.oauth_v2_access(
@@ -166,6 +166,9 @@ class SlackService:
             token = resp.get("access_token")
             team = resp.get("team", {})
             team_id = team.get("id")
+            team_name = team.get("name", "")
+            team_domain = team.get("domain", "")
+            
             if not token or not team_id:
                 raise ValueError("Invalid OAuth response")
 
@@ -173,9 +176,11 @@ class SlackService:
                 team_id=team_id,
                 access_token=token,
                 bot_user_id=resp.get("bot_user_id", ""),
-                team_name=team.get("name", "")
+                team_name=team_name,
+                domain=f"{team_domain}.slack.com" if team_domain else "",
+                session_id=session_id
             )
-            logger.info(f"Installed Slack for {team_id}")
+            logger.info(f"Installed Slack for team {team_id} ({team_name}) with session {session_id}")
             return {"status": "success", "message": "Slack integration complete"}
         except SlackApiError as e:
             logger.error(f"OAuth error: {e.response['error']}")

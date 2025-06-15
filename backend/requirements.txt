@@ -1,3 +1,7 @@
+# Dragify AI Agent - Backend Dependencies
+# This file contains all Python packages required for the FastAPI backend
+# Includes web framework, AI/LLM, database, OAuth, and integration dependencies
+
 # Web framework
 fastapi==0.104.1
 uvicorn[standard]==0.24.0

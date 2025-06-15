@@ -1,3 +1,19 @@
+"""
+Dragify AI Agent - Main FastAPI Application
+
+This is the main entry point for the Dragify AI Agent backend service.
+It provides:
+- RESTful API endpoints for team and integration management
+- WebSocket connections for real-time event streaming
+- OAuth integration flows for Slack, Zoho CRM, and Gmail
+- Session-based authentication for multi-user support
+- Event logging with automatic timeout handling (5-minute timeout)
+- Database migrations and health checks
+
+The application orchestrates AI-powered lead processing workflows
+triggered by Slack messages and integrated with CRM and email systems.
+"""
+
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -65,6 +81,16 @@ async def on_startup():
     # Then create any new tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    
+    # Start the event timeout monitor
+    from app.services.event_logger import event_logger
+    await event_logger.start_timeout_monitor()
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    # Stop the event timeout monitor
+    from app.services.event_logger import event_logger
+    await event_logger.stop_timeout_monitor()
 
 async def run_migrations():
     """Run database migrations"""
@@ -170,58 +196,9 @@ async def get_logs(limit: int = 50, team_id: str = None):
         # Get logs from the event logger
         logs = await event_logger.get_recent_events(limit=limit, team_id=team_id)
         
-        # If no logs in database, return some sample data for demo
+        # Return empty logs if none exist
         if not logs:
-            logs = [
-                {
-                    "id": 1,
-                    "event_type": "lead_processed",
-                    "event_data": {
-                        "first_name": "Yasmine",
-                        "last_name": "Ahmed",
-                        "phone": "01023456789",
-                        "location": "Sheikh Zayed",
-                        "property_type": "duplex",
-                        "bedrooms": 3,
-                        "budget": 5500000,
-                        "team_id": "T090NR297QD",
-                        "matched_projects": ["Al Burouj Phase 3", "Swan Lake Phase 2", "Badya Phase 5"]
-                    },
-                    "status": "success",
-                    "error_message": None,
-                    "team_id": "T090NR297QD",
-                    "created_at": "2025-06-14T08:03:16+00:00",
-                    "updated_at": "2025-06-14T08:03:16+00:00"
-                },
-                {
-                    "id": 2,
-                    "event_type": "crm_insertion",
-                    "event_data": {
-                        "team_id": "T090NR297QD",
-                        "crm_type": "zoho",
-                        "lead_id": "6829239000000606002"
-                    },
-                    "status": "success",
-                    "error_message": None,
-                    "team_id": "T090NR297QD",
-                    "created_at": "2025-06-14T08:03:15+00:00",
-                    "updated_at": "2025-06-14T08:03:15+00:00"
-                },
-                {
-                    "id": 3,
-                    "event_type": "email_notification",
-                    "event_data": {
-                        "team_id": "T090NR297QD",
-                        "recipient": "yfathi2008@gmail.com",
-                        "subject": "✅ New Lead Processed Successfully - Yasmine Ahmed"
-                    },
-                    "status": "success",
-                    "error_message": None,
-                    "team_id": "T090NR297QD",
-                    "created_at": "2025-06-14T08:03:17+00:00",
-                    "updated_at": "2025-06-14T08:03:17+00:00"
-                }
-            ]
+            logs = []
         
         return {"logs": logs}
         
@@ -229,25 +206,76 @@ async def get_logs(limit: int = 50, team_id: str = None):
         logger.error(f"Error fetching logs: {e}")
         return {"logs": [], "error": str(e)}
 
+# Manual timeout check endpoint (for testing/admin purposes)
+@app.post("/api/logs/check-timeouts")
+async def check_timeouts():
+    """Manually check for and timeout processing events"""
+    try:
+        await event_logger._check_and_timeout_events()
+        return {"message": "Timeout check completed successfully"}
+    except Exception as e:
+        logger.error(f"Error checking timeouts: {e}")
+        return {"error": str(e)}
+
+# Get timeout configuration
+@app.get("/api/logs/timeout-config")
+async def get_timeout_config():
+    """Get current timeout configuration"""
+    try:
+        config = event_logger.get_timeout_config()
+        return config
+    except Exception as e:
+        logger.error(f"Error getting timeout config: {e}")
+        return {"error": str(e)}
+
 # Test endpoint to create sample events
 @app.post("/api/test-event")
-async def create_test_event():
+async def create_test_event(team_id: str):
     """Create a test event for demonstration"""
+    if not team_id:
+        return {"status": "error", "error": "team_id is required"}
+        
     try:
         event_id = await event_logger.log_event(
             event_type="test_event",
             event_data={
                 "message": "This is a test event",
-                "timestamp": "2025-01-01T12:00:00Z"
+                "timestamp": "2025-01-01T12:00:00Z",
+                "team_id": team_id
             },
             status="success",
-            team_id="T090NR297QD"
+            team_id=team_id
         )
         
         return {"status": "success", "event_id": event_id, "message": "Test event created"}
         
     except Exception as e:
         logger.error(f"Error creating test event: {e}")
+        return {"status": "error", "error": str(e)}
+
+# Test endpoint to create a processing event (for timeout testing)
+@app.post("/api/test-processing-event")
+async def create_test_processing_event(team_id: str):
+    """Create a test processing event to test timeout functionality"""
+    if not team_id:
+        return {"status": "error", "error": "team_id is required"}
+        
+    try:
+        event_id = await event_logger.log_event(
+            event_type="test_processing_event",
+            event_data={
+                "message": "This is a test processing event that will timeout",
+                "timestamp": datetime.utcnow().isoformat(),
+                "team_id": team_id
+            },
+            status="processing",  # This will remain processing until timeout
+            team_id=team_id
+        )
+        
+        return {"status": "success", "event_id": event_id, "message": "Test processing event created (will timeout in 5 minutes)"}
+        
+    except Exception as e:
+        logger.error(f"Error creating test processing event: {e}")
         return {"status": "error", "error": str(e)}
 
 if __name__ == "__main__":

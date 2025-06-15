@@ -1,3 +1,28 @@
+/**
+ * Dragify AI Agent - Main Dashboard Component
+ * 
+ * This is the primary React component for the Dragify AI Agent dashboard.
+ * 
+ * Key Features:
+ * - Session-based authentication with localStorage persistence
+ * - Real-time WebSocket connection for live event updates
+ * - OAuth integration management for Slack, Zoho CRM, and Gmail
+ * - Team selection and management
+ * - Event logging with status tracking and timeout handling
+ * - Responsive UI with gradient design and real-time indicators
+ * 
+ * Session Management:
+ * - Each browser session gets a unique session ID
+ * - Incognito browsers get separate isolated sessions
+ * - All API requests include session headers for user isolation
+ * - Session ID is displayed in the header for transparency
+ * 
+ * Real-time Updates:
+ * - WebSocket connection provides live event streaming
+ * - Automatic reconnection on connection loss
+ * - In-memory event updates with optimistic UI updates
+ */
+
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -54,11 +79,13 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<string>("Disconnected");
+  const [sessionId, setSessionId] = useState<string>("");
   const [oauthStatus, setOauthStatus] = useState<OAuthStatus>({
     slack: { connected: false, configured: true },
     zoho: { connected: false, configured: true },
     gmail: { connected: false, configured: true },
   });
+
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -68,9 +95,16 @@ export default function Home() {
   const cleanApiUrl = API_URL.replace(/\/$/, '');
   const WS_URL = cleanApiUrl.replace("https://", "wss://").replace("http://", "ws://");
 
+  // Initialize session on component mount
   useEffect(() => {
-    fetchTeams();
-    connectWebSocket();
+    initializeSession();
+  }, []);
+
+  useEffect(() => {
+    if (sessionId) {
+      fetchTeams();
+      connectWebSocket();
+    }
 
     return () => {
       if (wsRef.current) {
@@ -80,7 +114,7 @@ export default function Home() {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, []);
+  }, [sessionId]);
 
   // Fetch logs when selected team changes
   useEffect(() => {
@@ -90,10 +124,54 @@ export default function Home() {
     }
   }, [selectedTeam]);
 
+  // Session management functions
+  const generateSessionId = (): string => {
+    return 'session_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now().toString(36);
+  };
+
+  const initializeSession = async () => {
+    try {
+      // Check if session exists in localStorage
+      let storedSessionId = localStorage.getItem('dragify_session_id');
+      
+      if (!storedSessionId) {
+        // Generate new session ID
+        storedSessionId = generateSessionId();
+        localStorage.setItem('dragify_session_id', storedSessionId);
+        
+        // Initialize session with backend
+        await axios.post(`${API_URL}/teams/init-session`, {}, {
+          headers: { 
+            'ngrok-skip-browser-warning': 'true',
+            'X-Session-ID': storedSessionId
+          }
+        });
+      }
+      
+      setSessionId(storedSessionId);
+      console.log('Session initialized:', storedSessionId);
+    } catch (err) {
+      console.error('Failed to initialize session:', err);
+      // Generate session ID anyway for frontend state
+      const newSessionId = generateSessionId();
+      localStorage.setItem('dragify_session_id', newSessionId);
+      setSessionId(newSessionId);
+    }
+  };
+
+  const getSessionHeaders = () => {
+    return {
+      'ngrok-skip-browser-warning': 'true',
+      'X-Session-ID': sessionId
+    };
+  };
+
   const fetchTeams = async () => {
+    if (!sessionId) return;
+    
     try {
       const response = await axios.get(`${API_URL}/teams/`, {
-        headers: { 'ngrok-skip-browser-warning': 'true' }
+        headers: getSessionHeaders()
       });
       const teamsData = response.data.teams || [];
       setTeams(teamsData);
@@ -173,12 +251,12 @@ export default function Home() {
   };
 
   const fetchLogs = async () => {
-    if (!selectedTeam) return;
+    if (!selectedTeam || !sessionId) return;
     
     setRefreshing(true);
     try {
       const response = await axios.get(`${API_URL}/api/logs?team_id=${selectedTeam}`, {
-        headers: { 'ngrok-skip-browser-warning': 'true' }
+        headers: getSessionHeaders()
       });
       setLogs(response.data.logs || []);
     } catch (err) {
@@ -189,11 +267,12 @@ export default function Home() {
   };
 
   const checkOAuthStatus = async () => {
-    if (!selectedTeam) return;
+    if (!selectedTeam || !sessionId) return;
     
     try {
-      const headers = { 'ngrok-skip-browser-warning': 'true' };
-      const response = await axios.get(`${API_URL}/teams/${selectedTeam}/integrations`, { headers });
+      const response = await axios.get(`${API_URL}/teams/${selectedTeam}/integrations`, { 
+        headers: getSessionHeaders() 
+      });
       setOauthStatus(response.data);
     } catch (err) {
       console.error("Failed to check OAuth status:", err);
@@ -201,24 +280,47 @@ export default function Home() {
   };
 
   const handleOAuth = async (service: string) => {
-    if (!selectedTeam) {
-      alert("Please select a team first");
+    // Allow Slack OAuth even without a selected team (it creates the team)
+    // For other services, require a team to be selected
+    if (!selectedTeam && service !== 'slack') {
+      alert("Please select a team first, or connect Slack to create your first team");
+      return;
+    }
+    
+    if (!sessionId) {
+      alert("Session not initialized. Please refresh the page.");
       return;
     }
     
     try {
-      console.log(`Attempting OAuth for ${service} with team ${selectedTeam}`);
-      const response = await axios.get(`${API_URL}/${service}/oauth/authorize?team_id=${selectedTeam}`, {
-        headers: {
-          'ngrok-skip-browser-warning': 'true'
-        }
+      console.log(`Attempting OAuth for ${service}${selectedTeam ? ` with team ${selectedTeam}` : ' (creating new team)'}`);
+      
+      // For Slack without a team, don't pass team_id (it will be created during OAuth)
+      // Include session ID in the URL for OAuth state management
+      const baseUrl = selectedTeam 
+        ? `${cleanApiUrl}/${service}/oauth/authorize?team_id=${selectedTeam}&session_id=${sessionId}`
+        : `${cleanApiUrl}/${service}/oauth/authorize?session_id=${sessionId}`;
+        
+      const response = await axios.get(baseUrl, {
+        headers: getSessionHeaders()
       });
       console.log(`OAuth response for ${service}:`, response.data);
       
       const authUrl = response.data.auth_url || response.data.authorization_url;
       if (authUrl) {
         console.log(`Opening OAuth URL: ${authUrl}`);
-        window.open(authUrl, "_blank", "width=600,height=600");
+        const popup = window.open(authUrl, "_blank", "width=600,height=600");
+        
+        // Auto-refresh after any OAuth connection
+        const checkClosed = setInterval(() => {
+          if (popup?.closed) {
+            clearInterval(checkClosed);
+            setTimeout(() => {
+              fetchTeams(); // Refresh teams list
+              checkOAuthStatus(); // Refresh OAuth status
+            }, 2000);
+          }
+        }, 1000);
       } else {
         console.error(`No auth URL found in response for ${service}:`, response.data);
       }
@@ -237,14 +339,21 @@ export default function Home() {
       return;
     }
     
+    if (!sessionId) {
+      alert("Session not initialized. Please refresh the page.");
+      return;
+    }
+    
     try {
       await axios.post(`${API_URL}/api/test-event`, { team_id: selectedTeam }, {
-        headers: { 'ngrok-skip-browser-warning': 'true' }
+        headers: getSessionHeaders()
       });
     } catch (error) {
       console.error("Failed to create test event:", error);
     }
   };
+
+
 
   const handleTeamChange = (teamId: string) => {
     setSelectedTeam(teamId);
@@ -291,6 +400,7 @@ export default function Home() {
 
     return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
+
       {/* Header */}
       <div className="bg-white/10 backdrop-blur-md border-b border-white/20 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -304,39 +414,68 @@ export default function Home() {
               </div>
               
               {/* Team Selector */}
-              {teams.length > 0 && (
-                <div className="flex items-center space-x-3">
-                  <div className="text-sm text-blue-200">Team:</div>
-                  <select
-                    value={selectedTeam}
-                    onChange={(e) => handleTeamChange(e.target.value)}
-                    className="bg-white/10 backdrop-blur-md border border-white/20 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-                  >
-                    <option value="" className="bg-slate-800 text-white">Select Team</option>
-                    {teams.map((team) => (
-                      <option key={team.team_id} value={team.team_id} className="bg-slate-800 text-white">
-                        {team.team_name || team.team_id}
-                      </option>
-                    ))}
-                  </select>
-                  
-                  {/* Current Team Info */}
-                  {selectedTeam && getCurrentTeam() && (
-                    <div className="bg-blue-500/20 backdrop-blur-sm border border-blue-400/30 rounded-lg px-3 py-2">
-                      <div className="text-xs text-blue-200">Current Team</div>
-                      <div className="text-sm font-medium text-white">
-                        {getCurrentTeam()?.team_name || selectedTeam}
+              <div className="flex items-center space-x-3">
+                <div className="text-sm text-blue-200">Team:</div>
+                
+                {teams.length > 0 ? (
+                  <>
+                    <select
+                      value={selectedTeam}
+                      onChange={(e) => handleTeamChange(e.target.value)}
+                      className="bg-white/10 backdrop-blur-md border border-white/20 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                    >
+                      <option value="" className="bg-slate-800 text-white">Select Team</option>
+                      {teams.map((team) => (
+                        <option key={team.team_id} value={team.team_id} className="bg-slate-800 text-white">
+                          {team.team_name || team.team_id}
+                        </option>
+                      ))}
+                    </select>
+                    
+                    {/* Current Team Info */}
+                    {selectedTeam && getCurrentTeam() && (
+                      <div className="bg-blue-500/20 backdrop-blur-sm border border-blue-400/30 rounded-lg px-3 py-2">
+                        <div className="text-xs text-blue-200">Current Team</div>
+                        <div className="text-sm font-medium text-white">
+                          {getCurrentTeam()?.team_name || selectedTeam}
+                        </div>
+                        {getCurrentTeam()?.domain && (
+                          <div className="text-xs text-blue-300">{getCurrentTeam()?.domain}</div>
+                        )}
                       </div>
-                      {getCurrentTeam()?.domain && (
-                        <div className="text-xs text-blue-300">{getCurrentTeam()?.domain}</div>
-                      )}
+                    )}
+                  </>
+                ) : (
+                  <div className="bg-amber-500/20 backdrop-blur-sm border border-amber-400/30 rounded-lg px-4 py-2">
+                    <div className="text-xs text-amber-200">No Teams Found</div>
+                    <div className="text-sm font-medium text-white">
+                      Connect Slack to create your first team
                     </div>
-                  )}
-                </div>
-              )}
+                    <div className="text-xs text-amber-300">Teams are created automatically during OAuth</div>
+                  </div>
+                )}
+
+              </div>
             </div>
             
             <div className="flex items-center space-x-4">
+              {/* Session Indicator */}
+              <div className={`flex items-center space-x-2 border rounded-full px-3 py-1 backdrop-blur-sm ${
+                sessionId 
+                  ? "bg-blue-500/20 border-blue-400/30" 
+                  : "bg-gray-500/20 border-gray-400/30"
+              }`}>
+                <div className={`w-2 h-2 rounded-full ${
+                  sessionId ? "bg-blue-400" : "bg-gray-400"
+                }`}></div>
+                <span className={`text-xs font-medium ${
+                  sessionId ? "text-blue-200" : "text-gray-200"
+                }`}>
+                  {sessionId ? `Session: ${sessionId.slice(-8)}` : "No Session"}
+                </span>
+              </div>
+              
+              {/* Connection Status */}
               <div className={`flex items-center space-x-2 border rounded-full px-4 py-2 backdrop-blur-sm ${
                 isConnected 
                   ? "bg-green-500/20 border-green-400/30" 

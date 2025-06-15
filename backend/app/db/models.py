@@ -38,6 +38,12 @@ class Team(Base):
         nullable=True,
         doc="Team domain (e.g., company.slack.com)"
     )
+    session_id = Column(
+        String,
+        index=True,
+        nullable=True,
+        doc="Session ID for session-based isolation"
+    )
     is_active = Column(
         Boolean,
         nullable=False,

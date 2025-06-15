@@ -17,12 +17,25 @@ gmail_service = GmailService(
 )
 
 @router.get("/oauth/authorize", summary="Get Gmail OAuth authorization URL")
-async def gmail_oauth_authorize(team_id: str = Query(default="T090NR297QD", description="Slack team_id for this integration")):
+async def gmail_oauth_authorize(team_id: str = Query(..., description="Slack team_id for this integration"), request: Request = None):
     """
     Generate Gmail OAuth authorization URL.
     Redirect users to this URL to start the OAuth flow.
     """
     try:
+        # Try to get session ID, but don't require it for now (backward compatibility)
+        from app.utils.session import SessionManager
+        session_id = SessionManager.get_session_id_from_request(request)
+        
+        # If we have a session ID, validate team access
+        if session_id:
+            from app.db.crud import get_team_by_id_and_session
+            from app.db.session import AsyncSessionLocal
+            async with AsyncSessionLocal() as session:
+                team = await get_team_by_id_and_session(team_id, session_id)
+                if not team:
+                    raise HTTPException(status_code=403, detail="Team not found or access denied")
+        
         authorization_url = gmail_service.get_authorization_url(team_id)
         return {
             "auth_url": authorization_url,
@@ -84,9 +97,9 @@ async def test_email(team_id: str):
         raise HTTPException(status_code=500, detail="Failed to send test email")
 
 @router.get("/status", summary="Check Gmail integration status")
-async def gmail_status():
+async def gmail_status(team_id: str = None):
     """
-    Check if Gmail integration is set up for the demo team.
+    Check if Gmail integration is set up for a specific team.
     """
     try:
         from app.db.session import AsyncSessionLocal
@@ -94,7 +107,13 @@ async def gmail_status():
         from sqlalchemy import select
         from datetime import datetime
         
-        team_id = "T090NR297QD"  # Demo team ID
+        if not team_id:
+            return {
+                "connected": False,
+                "service": "gmail",
+                "configured": bool(config.client_id),
+                "user_email": None
+            }
         
         async with AsyncSessionLocal() as session:
             stmt = select(GmailInstallation).where(GmailInstallation.team_id == team_id)

@@ -482,6 +482,36 @@ dragify-demo-agent/
 └── README.md
 ```
 
+## 📝 Code Documentation & Cleanup
+
+The codebase has been thoroughly documented and cleaned up for production readiness:
+
+### ✅ **Documentation Added:**
+- **Main Application (`main.py`)**: Comprehensive module docstring explaining the FastAPI backend architecture
+- **Event Logger Service**: Detailed documentation of event lifecycle and timeout handling (5-minute automatic timeout)
+- **Session Management**: Complete documentation of multi-user isolation system
+- **Frontend Dashboard**: Full component documentation explaining session management and real-time features
+- **Docker Compose**: Service-level comments explaining the application stack
+- **Requirements**: Header comments categorizing dependencies
+
+### ✅ **Files Cleaned Up:**
+- **Removed**: `frontend/utils/session.ts` (empty file)
+- **Preserved**: Empty `__init__.py` files (required for Python packages)
+- **Preserved**: All functional code and configuration files
+
+### ✅ **Key Features Documented:**
+- **Session-Based Authentication**: How each browser gets isolated workspace
+- **Event Timeout System**: 5-minute automatic timeout for stuck processing events
+- **Real-time Updates**: WebSocket architecture for live dashboard updates
+- **OAuth Integration Flow**: Complete workflow for Slack, Zoho, and Gmail
+
+### 📋 **Code Quality:**
+- All major functions and classes have docstrings
+- Configuration files have explanatory comments
+- No unnecessary or empty files remain
+- Clean separation of concerns maintained
+- Comprehensive error handling documented
+
 ## 🧪 Testing
 
 ### Manual Testing

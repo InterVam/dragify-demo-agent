@@ -3,7 +3,7 @@ user_flows = {
     "team_default": {
         "data_source": "postgresql",
         "crm": "zoho",
-        "notification_channel": "outlook"
+        "notification_channel": "gmail"
     },
      "T090NR297QD": {  
         "data_source": "postgresql",
