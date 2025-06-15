@@ -103,7 +103,6 @@ export default function Home() {
   useEffect(() => {
     if (sessionId) {
       fetchTeams();
-      connectWebSocket();
     }
 
     return () => {
@@ -115,6 +114,28 @@ export default function Home() {
       }
     };
   }, [sessionId]);
+
+  // Separate useEffect for WebSocket connection that requires both session and team
+  useEffect(() => {
+    if (sessionId && selectedTeam) {
+      connectWebSocket();
+    } else {
+      // Close WebSocket if team is deselected
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    }
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+    };
+  }, [sessionId, selectedTeam]);
 
   // Fetch logs when selected team changes
   useEffect(() => {

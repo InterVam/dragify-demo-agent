@@ -191,9 +191,13 @@ async def health_check():
 # API logs endpoint for frontend
 @app.get("/api/logs")
 async def get_logs(limit: int = 50, team_id: str = None):
-    """Get recent activity logs for the dashboard"""
+    """Get recent activity logs for the dashboard - requires team_id for filtering"""
     try:
-        # Get logs from the event logger
+        # Require team_id to prevent cross-team data leakage
+        if not team_id:
+            return {"logs": [], "message": "team_id is required"}
+        
+        # Get logs from the event logger (filtered by team)
         logs = await event_logger.get_recent_events(limit=limit, team_id=team_id)
         
         # Return empty logs if none exist
