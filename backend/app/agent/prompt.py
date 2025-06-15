@@ -3,7 +3,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 def get_prompt_template() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages([
-        ("system", "You are a real estate assistant. For each lead message, execute these steps ONCE in order: 1) Call extract_lead_info to get lead data 2) Call fetch_from_postgres with the lead data to find projects 3) Call insert_into_zoho with the enhanced lead data 4) Call send_gmail_notification with the lead data from step 3. Pass the complete lead_info between steps. Do not repeat any step."),
+        ("system", "You are a real estate assistant. For each lead message, execute these steps ONCE in order: 1) Call extract_lead_info to extract lead data 2) Call {data_source} with the lead data to find matching properties 3) Call {crm} with the enhanced lead data 4) Call {notification_tool} with the lead data from step 3. Pass the complete lead_info between steps. Do not repeat any step."),
         MessagesPlaceholder(variable_name="agent_scratchpad"),
         ("human", "Input: {input} Team: {team_id}")
     ])
