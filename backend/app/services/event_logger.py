@@ -34,7 +34,7 @@ class EventLogger:
     def __init__(self):
         # In-memory store for real-time updates (bounded to prevent memory leaks)
         self.live_events = deque(maxlen=1000)
-        self.subscribers = set()
+        self.subscribers = []  # Changed from set to list to store dict objects
         self.timeout_task = None
         self.timeout_minutes = 5  # Timeout after 5 minutes
     
@@ -176,7 +176,7 @@ class EventLogger:
             "session_id": session_id,
             "team_id": team_id
         }
-        self.subscribers.add(websocket_info)
+        self.subscribers.append(websocket_info)
         
         try:
             # Send recent events on connection (filtered)
@@ -199,7 +199,8 @@ class EventLogger:
         except Exception as e:
             logger.error(f"WebSocket subscription error: {e}")
         finally:
-            self.subscribers.discard(websocket_info)
+            if websocket_info in self.subscribers:
+                self.subscribers.remove(websocket_info)
     
     async def _notify_subscribers(self, event_data: Dict[str, Any]):
         """Notify all subscribers of new/updated events with filtering"""
@@ -212,7 +213,7 @@ class EventLogger:
         })
         
         # Remove disconnected subscribers
-        disconnected = set()
+        disconnected = []
         for subscriber_info in self.subscribers:
             try:
                 websocket = subscriber_info["websocket"]
@@ -224,10 +225,12 @@ class EventLogger:
                 
                 await websocket.send_text(message)
             except Exception:
-                disconnected.add(subscriber_info)
+                disconnected.append(subscriber_info)
         
         # Clean up disconnected subscribers
-        self.subscribers -= disconnected
+        for subscriber_info in disconnected:
+            if subscriber_info in self.subscribers:
+                self.subscribers.remove(subscriber_info)
 
     async def start_timeout_monitor(self, timeout_minutes: int = None):
         """Start the background task to monitor for timed-out events"""
